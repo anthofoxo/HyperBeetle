@@ -1,0 +1,6 @@
+[book]
+authors = ["AnthoFoxo"]
+language = "en"
+multilingual = false
+src = "src"
+title = "HyperBeetle"

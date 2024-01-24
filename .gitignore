@@ -1,0 +1,16 @@
+# Binary output
+/binaries
+
+# Visual studio
+/.vs
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# gmake
+Makefile
+
+# Runtime debugging
+/hyperbeetle_data/debug
+/hyperbeetle_data/imgui.ini
