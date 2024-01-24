@@ -513,6 +513,11 @@ struct RenderTarget {
 	GLuint color = 0;
 	GLuint depth = 0;
 
+	void Bind() {
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+		glViewport(0, 0, width, height);
+	}
+
 	void Delete() {
 
 		if (framebuffer != 0) {
@@ -581,74 +586,19 @@ public:
 
 	bool ridingTrack = false;
 
-	int current_width = -1, current_height = -1;
-
-	GLuint framebuffer = 0;
-	GLuint colorTexture;
-	GLuint depthRenderbuffer;
-
-	GLuint framebuffer2 = 0;
-	GLuint colorTexture2;
-	GLuint depthRenderbuffer2;
+	RenderTarget target0;
+	RenderTarget target1;
 
 	void CreateRenderbuffer(int width, int height) {
-
-		if (width == current_width && height == current_height) return;
-
-		current_width = width;
-		current_height = height;
-
-		if (framebuffer != 0) {
-			glDeleteFramebuffers(1, &framebuffer);
-			glDeleteTextures(1, &colorTexture);
-			glDeleteRenderbuffers(1, &depthRenderbuffer);
+		if (target0.width != width || target0.height != height) {
+			target0.Delete();
+			target0 = CreateRenderTarget(width, height);
 		}
 
-		glGenFramebuffers(1, &framebuffer);
-		glGenTextures(1, &colorTexture);
-		glGenRenderbuffers(1, &depthRenderbuffer);
-
-		glBindRenderbuffer(GL_RENDERBUFFER, depthRenderbuffer);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
-
-		glBindTexture(GL_TEXTURE_2D, colorTexture);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
-		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRenderbuffer);
-
-		// 2
-
-		if (framebuffer2 != 0) {
-			glDeleteFramebuffers(1, &framebuffer2);
-			glDeleteTextures(1, &colorTexture2);
-			glDeleteRenderbuffers(1, &depthRenderbuffer2);
+		if (target1.width != width || target1.height != height) {
+			target1.Delete();
+			target1 = CreateRenderTarget(width, height);
 		}
-
-		glGenFramebuffers(1, &framebuffer2);
-		glGenTextures(1, &colorTexture2);
-		glGenRenderbuffers(1, &depthRenderbuffer2);
-
-		glBindRenderbuffer(GL_RENDERBUFFER, depthRenderbuffer2);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
-
-		glBindTexture(GL_TEXTURE_2D, colorTexture2);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture2, 0);
-		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRenderbuffer2);
 	}
 
 	void Init() {
@@ -677,7 +627,6 @@ public:
 				split(val, map, ':');
 				objtransforms[std::stoi(map[0])].Reset();
 				objtransforms[std::stoi(map[0])].Rotate(glm::radians(std::stof(map[1])), glm::vec3(0, 1, 0));
-				//objtransforms[std::stoi(map[0])].Rotate(glm::radians<float>(rand() % 10 - 5), glm::vec3(0, 1, 0));
 				objtransforms[std::stoi(map[0])].Rotate(glm::radians(3.0f), glm::vec3(1, 0, 0));
 				objtransforms[std::stoi(map[0])].Translate(glm::vec3(0, 0, -10));
 			}
@@ -799,10 +748,10 @@ public:
 			ImGui::DragFloat("CubicDistortion", &cubicDistortion, 0.1f);
 			ImGui::DragInt("Inset", &inset);
 
-			ImGui::DragFloat4("uBlack_InvRange_InvGamma", glm::value_ptr(uBlack_InvRange_InvGamma), 0.01f);
-			ImGui::DragFloat4("uInvGammas", glm::value_ptr(uInvGammas), 0.01f);
-			ImGui::DragFloat4("uOutputRanges", glm::value_ptr(uOutputRanges), 0.01f);
-			ImGui::DragFloat4("uOutputBlacks", glm::value_ptr(uOutputBlacks), 0.01f);
+			ImGui::DragFloat2("uBlack_InvRange_InvGamma", glm::value_ptr(uBlack_InvRange_InvGamma), 0.01f);
+			ImGui::DragFloat3("uInvGammas", glm::value_ptr(uInvGammas), 0.01f);
+			ImGui::DragFloat3("uOutputRanges", glm::value_ptr(uOutputRanges), 0.01f);
+			ImGui::DragFloat3("uOutputBlacks", glm::value_ptr(uOutputBlacks), 0.01f);
 
 		}
 		ImGui::End();
@@ -903,7 +852,7 @@ public:
 		}
 
 		//glm::mat4 projection = glm::perspectiveFov<float>(glm::radians(90.0f), w, h, 0.1f, 1024.0f);
-		glm::mat4 projection = glm::infinitePerspective(glm::radians(90.0f), (float)current_width / (float)current_height, 0.1f);
+		glm::mat4 projection = glm::infinitePerspective(glm::radians(90.0f), (float)target0.width / (float)target0.height, 0.1f);
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0, 0 });
 
@@ -915,7 +864,7 @@ public:
 			ImVec2 min = ImGui::GetWindowContentRegionMin();
 			ImVec2 max = ImGui::GetWindowContentRegionMax();
 
-			ImGui::Image((void*)colorTexture2, ImVec2(current_width, current_height), { 0, 1 }, { 1, 0 });
+			ImGui::Image((void*)target1.color, ImVec2(target0.width, target0.height), { 0, 1 }, { 1, 0 });
 
 			ImGuizmo::SetDrawlist();
 			ImGuizmo::SetRect(min.x + ImGui::GetWindowPos().x, min.y + ImGui::GetWindowPos().y, max.x - min.x, max.y - min.y);
@@ -936,14 +885,13 @@ public:
 
 		// Draw viewport
 		{
-			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2);
-			glViewport(0, 0, current_width, current_height);
+			target1.Bind();
 
 			glClearColor(0.0f, 0.0f, 0.3f, 0.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			glEnable(GL_SCISSOR_TEST);
-			glScissor(inset, inset, current_width - inset * 2, current_height - inset * 2);
+			glScissor(inset, inset, target1.width - inset * 2, target1.height - inset * 2);
 
 			// Draw skybox
 			glActiveTexture(GL_TEXTURE0 + 0);
@@ -1004,13 +952,13 @@ public:
 			glGenVertexArrays(1, &vao);
 			glBindVertexArray(vao);
 
-			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+			target0.Bind();
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			glitchProgram.Bind();
 			glActiveTexture(GL_TEXTURE0 + 0);
-			glBindTexture(GL_TEXTURE_2D, colorTexture2);
+			glBindTexture(GL_TEXTURE_2D, target1.color);
 
 			glitchProgram.Uniform1f("shake_power", 0.03f);
 			glitchProgram.Uniform1f("shake_rate", 0.2f);
@@ -1022,22 +970,22 @@ public:
 
 			// Do cubic and distort
 
-			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer2);
+			target1.Bind();
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			/////
 			cubicProgram.Bind();
 			glActiveTexture(GL_TEXTURE0 + 0);
-			glBindTexture(GL_TEXTURE_2D, colorTexture);
+			glBindTexture(GL_TEXTURE_2D, target0.color);
 
 			cubicProgram.Uniform1f("uDistortion", distort);
 			cubicProgram.Uniform1f("uCubicDistortion", cubicDistortion);
 			cubicProgram.Uniform2f("uOffset", offset);
-			cubicProgram.Uniform4f("uBlack_InvRange_InvGamma", uBlack_InvRange_InvGamma);
-			cubicProgram.Uniform4f("uInvGammas", uInvGammas);
-			cubicProgram.Uniform4f("uOutputRanges", uOutputRanges);
-			cubicProgram.Uniform4f("uOutputBlacks", uOutputBlacks);
+			cubicProgram.Uniform2f("uBlack_InvRange_InvGamma", uBlack_InvRange_InvGamma);
+			cubicProgram.Uniform3f("uInvGammas", uInvGammas);
+			cubicProgram.Uniform3f("uOutputRanges", uOutputRanges);
+			cubicProgram.Uniform3f("uOutputBlacks", uOutputBlacks);
 			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 			glEnable(GL_DEPTH_TEST);
@@ -1056,10 +1004,10 @@ public:
 	float distort = -1.3f;
 	float cubicDistortion = 0.5;
 	int inset = 1;
-	glm::vec4 uBlack_InvRange_InvGamma = glm::vec4(0.07843, 1.08511, 0.0, 0.0);
-	glm::vec4 uInvGammas = glm::vec4(1.00, 1.00, 1.42857, 0.00);
-	glm::vec4 uOutputRanges = glm::vec4(0.81922, 0.96353, 0.92941, 0.00);
-	glm::vec4 uOutputBlacks = glm::vec4(0.18078, 0.03647, 0.07059, 0.00);
+	glm::vec2 uBlack_InvRange_InvGamma = glm::vec2(0.07843, 1.08511);
+	glm::vec3 uInvGammas = glm::vec3(1.00, 1.00, 1.42857);
+	glm::vec3 uOutputRanges = glm::vec3(0.81922, 0.96353, 0.92941);
+	glm::vec3 uOutputBlacks = glm::vec3(0.18078, 0.03647, 0.07059);
 };
 
 class LogoState : public hyperbeetle::State {
@@ -1119,8 +1067,7 @@ public:
 			target = CreateRenderTarget(w, h);
 		}
 
-		glBindFramebuffer(GL_FRAMEBUFFER, target.framebuffer);
-		glViewport(0, 0, w, h);
+		target.Bind();
 		glClearColor(0.0f, 0.1f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

@@ -37,24 +37,28 @@ namespace hyperbeetle {
 		}
 	}
 
-	void ShaderProgram::Uniform1i(std::string name, int v0) const {
+	void ShaderProgram::Uniform1i(std::string_view name, int v0) const {
 		glUniform1i(GetLocation(name), v0);
 	}
 
 
-	void ShaderProgram::Uniform1f(std::string name, float v0) const {
+	void ShaderProgram::Uniform1f(std::string_view name, float v0) const {
 		glUniform1f(GetLocation(name), v0);
 	}
 
-	void ShaderProgram::Uniform2f(std::string name, glm::vec2 const& v0) const {
+	void ShaderProgram::Uniform2f(std::string_view name, glm::vec2 const& v0) const {
 		glUniform2fv(GetLocation(name), 1, glm::value_ptr(v0));
 	}
 
-	void ShaderProgram::Uniform4f(std::string name, glm::vec4 const& v0) const {
+	void ShaderProgram::Uniform3f(std::string_view name, glm::vec3 const& v0) const {
+		glUniform3fv(GetLocation(name), 1, glm::value_ptr(v0));
+	}
+
+	void ShaderProgram::Uniform4f(std::string_view name, glm::vec4 const& v0) const {
 		glUniform4fv(GetLocation(name), 1, glm::value_ptr(v0));
 	}
 
-	void ShaderProgram::UniformMat4f(std::string name, glm::mat4 const& v0) const {
+	void ShaderProgram::UniformMat4f(std::string_view name, glm::mat4 const& v0) const {
 		glUniformMatrix4fv(GetLocation(name), 1, GL_FALSE, glm::value_ptr(v0));
 	}
 
@@ -62,7 +66,7 @@ namespace hyperbeetle {
 		glUseProgram(mHandle);
 	}
 
-	int ShaderProgram::GetLocation(std::string name) const {
+	int ShaderProgram::GetLocation(std::string_view name) const {
 		auto it = mUniforms.find(name);
 		if (it == mUniforms.end()) return -1;
 		return it->second.location;

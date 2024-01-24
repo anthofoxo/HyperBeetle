@@ -8,10 +8,10 @@ uniform float uCubicDistortion; // 0.5
 uniform vec2 uOffset; // Varies a bit ??? float2(0.0001, 0.00062)
 
 // y controls output color intensity
-uniform vec4 uBlack_InvRange_InvGamma; // float4(0.07843, 1.08511, 1.69561E-35, 4.59037E-41)
-uniform vec4 uInvGammas;               // float4(1.00,    1.00,    1.42857,     0.00       )
-uniform vec4 uOutputRanges;            // float4(0.81922, 0.96353, 0.92941,     0.00       )
-uniform vec4 uOutputBlacks;            // float4(0.18078, 0.03647, 0.07059,     0.00       )
+uniform vec2 uBlack_InvRange_InvGamma; // float2(0.07843, 1.08511)
+uniform vec3 uInvGammas;               // float3(1.00,    1.00,    1.42857)
+uniform vec3 uOutputRanges;            // float3(0.81922, 0.96353, 0.92941)
+uniform vec3 uOutputBlacks;            // float3(0.18078, 0.03647, 0.07059)
 
 varying vec2 vUv;
 
@@ -43,10 +43,10 @@ float2 ComputeCubicDistortionUv(float2 uv, float2 offset, float k, float kcube) 
   vec3 colorValue = texture(uAuxSampler, sampleUv.xy).xyz;
 
   // Extra step, This doesnt appear to always happen, check hashes
-  // colorValue = log2(colorValue);
-  // colorValue = colorValue * gInvGammas.xyz;
-  // colorValue = exp2(colorValue);
-  // colorValue = min(colorValue, float3(1.0, 1.0, 1.0));
+  colorValue = log2(colorValue);
+  colorValue = colorValue * uInvGammas.xyz;
+  colorValue = exp2(colorValue);
+  colorValue = min(colorValue, float3(1.0, 1.0, 1.0));
   
   colorValue = colorValue * uOutputRanges.xyz + uOutputBlacks.xyz;
   colorValue = colorValue + -uBlack_InvRange_InvGamma.xxx;
