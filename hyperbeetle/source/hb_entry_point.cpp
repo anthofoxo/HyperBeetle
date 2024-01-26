@@ -460,6 +460,32 @@ CustomGameContent LoadPacks() {
 	return content;
 }
 
+
+
+static void dumpstack(lua_State* L) {
+	int top = lua_gettop(L);
+	for (int i = 1; i <= top; i++) {
+		printf("%d\t%s\t", i, luaL_typename(L, i));
+		switch (lua_type(L, i)) {
+		case LUA_TNUMBER:
+			printf("%g\n", lua_tonumber(L, i));
+			break;
+		case LUA_TSTRING:
+			printf("%s\n", lua_tostring(L, i));
+			break;
+		case LUA_TBOOLEAN:
+			printf("%s\n", (lua_toboolean(L, i) ? "true" : "false"));
+			break;
+		case LUA_TNIL:
+			printf("%s\n", "nil");
+			break;
+		default:
+			printf("%p\n", lua_topointer(L, i));
+			break;
+		}
+	}
+}
+
 class Application final {
 public:
 	void Start() {
@@ -524,14 +550,39 @@ public:
 		luaL_openlibs(L);
 		luaL_dofile(L, "scripts/config.lua");
 
-		lua_getglobal(L, "Font");
-		std::string fontsource = lua_tostring(L, -1);
+		lua_getglobal(L, "Fonts");
+		lua_pushnil(L);
+
+		int primary = -1;
+
+		while (lua_next(L, -2)){
+			lua_pushvalue(L, -2);
+			const char* key = lua_tostring(L, -1);
+			const char* value = lua_tostring(L, -2);
+			
+			auto expectedBlob = hyperbeetle::LoadResourceBlob(value);
+			if (expectedBlob.has_value()) {
+				fontdatas.push_back(std::move(expectedBlob.value()));
+
+				int fontid = nvgCreateFontMem(vg, "default", fontdatas.back().Data<unsigned char>(), fontdatas.back().Size(), false);
+
+				if (primary == -1) {
+					primary = fontid;
+				}
+				else {
+					nvgAddFallbackFontId(vg, primary, fontid);
+				}
+
+			}
+			else
+				spdlog::warn("Font file doesnt exist {}", value);
+
+			lua_pop(L, 2);
+		}
+
 		lua_pop(L, 1);
 
-		fontdata = hyperbeetle::LoadResourceBlob(fontsource).value();
-		int font_id = nvgCreateFontMem(vg, "default", fontdata.Data<unsigned char>(), fontdata.Size(), false);
-		if (font_id == -1) spdlog::error("Failed to load font");
-		nvgFontFaceId(vg, font_id);
+		nvgFontFaceId(vg, primary);
 
 		glDepthFunc(GL_LEQUAL);	
 	}
@@ -590,7 +641,7 @@ public:
 	std::unordered_set<int> mLastKeys;
 	hyperbeetle::Window mWindow;
 	NVGcontext* vg;
-	hyperbeetle::Blob fontdata;
+	std::vector<hyperbeetle::Blob> fontdatas;
 	ma_engine engine;
 	hyperbeetle::StateManager mStateManager;
 };
@@ -1104,10 +1155,26 @@ public:
 	void Init() override {
 		lua_State* L = Get().GetUserPtr<Application>().L;
 		lua_getglobal(L, "Lang");
-		lua_getfield(L, -1, "en_us");
+		lua_getfield(L, -1, "eng"); // selected language id
 		lua_getfield(L, -1, "title");
-		title = lua_tostring(L, -1);
+		title = lua_tostring(L, -1); lua_pop(L, 1);
+		lua_getfield(L, -1, "menu");
+		lua_getfield(L, -1, "play");
+		std::string play_text = lua_tostring(L, -1); lua_pop(L, 1);
+		lua_getfield(L, -1, "option");
+		std::string option_text = lua_tostring(L, -1); lua_pop(L, 1);
+		lua_getfield(L, -1, "editor");
+		std::string editor_text = lua_tostring(L, -1); lua_pop(L, 1);
+		lua_getfield(L, -1, "quit");
+		std::string quit_text = lua_tostring(L, -1); lua_pop(L, 1);
 		lua_pop(L, 3);
+
+		options = {
+			MenuOption(play_text, false, nullptr),
+			MenuOption(option_text, false, nullptr),
+			MenuOption(editor_text, true, std::bind(&MenuState::OpenEditor, this)),
+			MenuOption(quit_text, true, std::bind(&MenuState::Quit, this))
+		};
 	}
 
 	~MenuState() {
@@ -1121,12 +1188,7 @@ public:
 		std::function<void()> invoke = nullptr;
 	};
 
-	std::array<MenuOption, 4> options = {
-		MenuOption("Play", false, nullptr),
-		MenuOption("Options", false, nullptr),
-		MenuOption("Editor", true, std::bind(&MenuState::OpenEditor, this)),
-		MenuOption("Quit", true, std::bind(&MenuState::Quit, this))
-	};
+	std::array<MenuOption, 4> options;
 
 	void OpenEditor() {
 		Get().GetUserPtr<Application>().deferredEvents.push_back([&]() {
@@ -1253,7 +1315,7 @@ public:
 		lua_State* L = Get().GetUserPtr<Application>().L;
 
 		lua_getglobal(L, "Lang");
-		lua_getfield(L, -1, "en_us");
+		lua_getfield(L, -1, "eng"); //  // selected language id
 		lua_getfield(L, -1, "title");
 		title = lua_tostring(L, -1);
 		lua_pop(L, 3);

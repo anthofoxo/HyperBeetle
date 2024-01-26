@@ -5,16 +5,33 @@ function file_exists(name)
  
 
 -- Specify language constants
+-- Uses ISO 639-2
 Lang = {}
-Lang["en_us"] = {}
-Lang["en_us"]["title"] = "HyperBeetle"
+Lang["eng"] = {}
+Lang["eng"]["title"] = "HyperBeetle"
+Lang["eng"]["menu"] = {}
+Lang["eng"]["menu"]["play"] = "Play"
+Lang["eng"]["menu"]["option"] = "Options"
+Lang["eng"]["menu"]["editor"] = "Editor"
+Lang["eng"]["menu"]["quit"] = "Quit"
 
--- Font file
+Lang["kor"] = {}
+Lang["kor"]["title"] = "강남스타일" -- Change this before release plz :3
+Lang["kor"]["menu"] = {}
+Lang["kor"]["menu"]["play"] = "놀다"
+Lang["kor"]["menu"]["option"] = "옵션"
+Lang["kor"]["menu"]["editor"] = "편집자"
+Lang["kor"]["menu"]["quit"] = "출구"
+
+Fonts = {}
+
 if file_exists("fonts/Futura_PT_Heavy.ttf") then
-    Font = "fonts/Futura_PT_Heavy.ttf"
+    table.insert(Fonts, "fonts/Futura_PT_Heavy.ttf")
 else
-    Font = "fonts/NotoSans-Bold.ttf"
+    table.insert(Fonts, "fonts/NotoSans-Bold.ttf")
 end
+
+table.insert(Fonts, "fonts/NotoSansKR-Bold.ttf")
 
 -- Cubemap file
 if file_exists("images/gReflectionMap.png") then
