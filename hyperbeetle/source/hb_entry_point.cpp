@@ -371,6 +371,95 @@ void SetupKhrDebug() {
 	glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
 }
 
+struct Pack {
+	std::string id;
+	std::string nspace;
+};
+
+struct Level {
+	Pack* origin;
+
+	std::string id;
+	std::string level_name;
+	int difficulty;
+	std::string description;
+	std::string author;
+	float bpm;
+};
+
+struct CustomGameContent {
+	std::unordered_map<std::string, Pack> packs;
+	std::unordered_map<std::string, Level> levels;
+};
+
+static CustomGameContent kGameContent;
+
+CustomGameContent LoadPacks() {
+	
+	CustomGameContent content;
+
+	spdlog::info("Searching for packs...");
+	for (auto& entry : std::filesystem::directory_iterator("pack")) {
+		std::string pack_id = entry.path().filename().generic_string();
+		spdlog::info("\tid: {}", pack_id);
+		Pack pack;
+
+		auto fileref = entry.path() / "pack.lua";
+
+		lua_State* L = luaL_newstate();
+		luaL_dofile(L, fileref.generic_string().c_str());
+		lua_getglobal(L, "namespace");
+		pack.nspace = lua_tostring(L, -1);
+		lua_pop(L, 1);
+		lua_close(L);
+
+		spdlog::info("\tnamespace: {}", pack.nspace);
+
+		pack.id = pack_id;
+
+		content.packs.emplace(std::make_pair(pack_id, pack));
+	}
+
+	spdlog::info("Searching for levels...");
+	for (auto& [k, v] : content.packs) {
+		std::string path = std::format("pack/{}/level", k);
+
+		for (auto& entry : std::filesystem::directory_iterator(path)) {
+			Level level;
+			level.origin = &v;
+			level.id = v.nspace + '.' + entry.path().stem().generic_string();
+
+			auto fileref = entry.path().generic_string();
+			lua_State* L = luaL_newstate();
+			luaL_dofile(L, fileref.c_str());
+			lua_getglobal(L, "level_name");
+			level.level_name = lua_tostring(L, -1);
+			lua_getglobal(L, "difficulty");
+			level.difficulty = lua_tointeger(L, -1);
+			lua_getglobal(L, "description");
+			level.description = lua_tostring(L, -1);
+			lua_getglobal(L, "author");
+			level.author = lua_tostring(L, -1);
+			lua_getglobal(L, "bpm");
+			level.bpm = lua_tonumber(L, -1);
+			lua_pop(L, 5);
+			lua_close(L);
+
+			spdlog::info("----------------");
+			spdlog::info("\tid: {}", level.id);
+			spdlog::info("\torigin: {}", k);
+			spdlog::info("\tlevel_name: {}", level.level_name);
+			spdlog::info("\tdifficulty: {}", level.difficulty);
+			spdlog::info("\tdescription: {}", level.description);
+			spdlog::info("\tauthor: {}", level.author);
+			spdlog::info("\tbpm: {}", level.bpm);
+			content.levels.emplace(std::make_pair(level.id, level));
+		}
+	}
+
+	return content;
+}
+
 class Application final {
 public:
 	void Start() {
@@ -1010,6 +1099,130 @@ public:
 	glm::vec3 uOutputBlacks = glm::vec3(0.18078, 0.03647, 0.07059);
 };
 
+class MenuState : public hyperbeetle::State {
+public:
+	void Init() override {
+		lua_State* L = Get().GetUserPtr<Application>().L;
+		lua_getglobal(L, "Lang");
+		lua_getfield(L, -1, "en_us");
+		lua_getfield(L, -1, "title");
+		title = lua_tostring(L, -1);
+		lua_pop(L, 3);
+	}
+
+	~MenuState() {
+	}
+
+	std::string title;
+
+	struct MenuOption {
+		std::string name;
+		bool has_func;
+		std::function<void()> invoke = nullptr;
+	};
+
+	std::array<MenuOption, 4> options = {
+		MenuOption("Play", false, nullptr),
+		MenuOption("Options", false, nullptr),
+		MenuOption("Editor", true, std::bind(&MenuState::OpenEditor, this)),
+		MenuOption("Quit", true, std::bind(&MenuState::Quit, this))
+	};
+
+	void OpenEditor() {
+		Get().GetUserPtr<Application>().deferredEvents.push_back([&]() {
+			Get().Set<EditorState>();
+			});
+	}
+
+	void Quit() {
+		Get().GetUserPtr<Application>().mRunning = false;
+	}
+
+	void Update() override {
+
+		int w, h;
+		glfwGetFramebufferSize(Get().GetUserPtr<Application>().mWindow, &w, &h);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, w, h);
+		glClearColor(0.2f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		NVGcontext* vg = Get().GetUserPtr<Application>().vg;
+		nvgBeginFrame(vg, w, h, 1);
+
+		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgFillColor(vg, { 1, 0.0f, 0.0f, 1 });
+		nvgFontSize(vg, 96);
+		nvgText(vg, w / 2, h / 7 * 1, title.data(), title.data() + title.size());
+
+		float scale = map(glm::sin((float)glfwGetTime() * 5.f), -1, 1, 0, 1);
+
+		static int selected = 0;
+
+		auto& keys = Get().GetUserPtr<Application>().mKeys;
+		auto& lastKeys = Get().GetUserPtr<Application>().mLastKeys;
+
+		if (keys.contains(GLFW_KEY_SPACE) && !lastKeys.contains(GLFW_KEY_SPACE)) {
+			if (options[selected].has_func) {
+				options[selected].invoke();
+				ma_engine_play_sound(&Get().GetUserPtr<Application>().engine, "audio/select1.ogg", nullptr);
+			}
+			else {
+				ma_engine_play_sound(&Get().GetUserPtr<Application>().engine, "audio/locked.ogg", nullptr);
+			}
+		}
+
+		if (keys.contains(GLFW_KEY_W) && !lastKeys.contains(GLFW_KEY_W)) {
+
+			int prev = selected;
+
+			--selected;
+			if (selected < 0) selected = 0;
+			if (selected >= options.size()) selected = options.size() - 1;
+
+			// cursor didnt move, error sound
+			if (prev == selected) {
+				ma_engine_play_sound(&Get().GetUserPtr<Application>().engine, "audio/locked.ogg", nullptr);
+			}
+			else {
+				ma_engine_play_sound(&Get().GetUserPtr<Application>().engine, "audio/select2.ogg", nullptr);
+			}
+		}
+
+		if (keys.contains(GLFW_KEY_S) && !lastKeys.contains(GLFW_KEY_S)) {
+
+			int prev = selected;
+
+			++selected;
+			if (selected < 0) selected = 0;
+			if (selected >= options.size()) selected = options.size() - 1;
+
+			// cursor didnt move, error sound
+			if (prev == selected) {
+				ma_engine_play_sound(&Get().GetUserPtr<Application>().engine, "audio/locked.ogg", nullptr);
+			}
+			else {
+				ma_engine_play_sound(&Get().GetUserPtr<Application>().engine, "audio/select2.ogg", nullptr);
+			}
+		}
+
+		for (int i = 0; i < options.size(); ++i) {
+			MenuOption& option = options[i];
+
+			if(i == selected)
+				nvgFontSize(vg, map(scale, 0, 1, 48, 64));
+			else
+				nvgFontSize(vg, 56);
+
+			nvgFillColor(vg, { 1, 0.0f, 0.0f, 1 });
+			nvgText(vg, w / 2, h / 7 * (3 + i), option.name.data(), option.name.data() + option.name.size());
+		}
+
+		nvgEndFrame(vg);
+	}
+};
+
 class LogoState : public hyperbeetle::State {
 public:
 	void Init() override {
@@ -1055,7 +1268,7 @@ public:
 
 		if (timer >= 1) {
 			Get().GetUserPtr<Application>().deferredEvents.push_back([&]() {
-				Get().Set<EditorState>();
+				Get().Set<MenuState>();
 			});
 		}
 
@@ -1129,6 +1342,8 @@ void AppMain() {
 	hyperbeetle::SetupLogger();
 	spdlog::info("Starting engine");
 	hyperbeetle::AttachRenderdoc();
+
+	kGameContent = LoadPacks();
 
 	{
 		Application app;
