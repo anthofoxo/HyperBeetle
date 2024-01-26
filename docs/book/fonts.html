@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="index.html">Introduction</a></li><li class="chapter-item expanded affix "><li class="part-title">General Guide</li><li class="chapter-item expanded "><a href="build.html"><strong aria-hidden="true">1.</strong> Building</a></li><li class="chapter-item expanded "><a href="glsl.html"><strong aria-hidden="true">2.</strong> Custom GLSL stntax</a></li><li class="chapter-item expanded "><a href="deps.html"><strong aria-hidden="true">3.</strong> Dependencies</a></li><li class="chapter-item expanded "><a href="hardware_requirements.html"><strong aria-hidden="true">4.</strong> Dependencies</a></li><li class="chapter-item expanded "><a href="profiling.html"><strong aria-hidden="true">5.</strong> Profiling</a></li><li class="chapter-item expanded "><a href="rdoc.html"><strong aria-hidden="true">6.</strong> Renderdoc</a></li><li class="chapter-item expanded "><a href="fonts.html" class="active"><strong aria-hidden="true">7.</strong> Fonts</a></li><li class="chapter-item expanded "><a href="additional_documents.html"><strong aria-hidden="true">8.</strong> Additional documents</a></li><li class="chapter-item expanded "><a href="todo.html"><strong aria-hidden="true">9.</strong> Todos</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="credits.html">Credits and Contributors</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="index.html">Introduction</a></li><li class="chapter-item expanded affix "><li class="part-title">General Guide</li><li class="chapter-item expanded "><a href="build.html"><strong aria-hidden="true">1.</strong> Building</a></li><li class="chapter-item expanded "><a href="glsl.html"><strong aria-hidden="true">2.</strong> Custom GLSL stntax</a></li><li class="chapter-item expanded "><a href="deps.html"><strong aria-hidden="true">3.</strong> Dependencies</a></li><li class="chapter-item expanded "><a href="hardware_requirements.html"><strong aria-hidden="true">4.</strong> Hardware Requirements</a></li><li class="chapter-item expanded "><a href="profiling.html"><strong aria-hidden="true">5.</strong> Profiling</a></li><li class="chapter-item expanded "><a href="rdoc.html"><strong aria-hidden="true">6.</strong> Renderdoc</a></li><li class="chapter-item expanded "><a href="fonts.html" class="active"><strong aria-hidden="true">7.</strong> Fonts</a></li><li class="chapter-item expanded "><a href="additional_documents.html"><strong aria-hidden="true">8.</strong> Additional documents</a></li><li class="chapter-item expanded "><a href="todo.html"><strong aria-hidden="true">9.</strong> Todos</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="credits.html">Credits and Contributors</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -175,12 +175,15 @@
                     <main>
                         <h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
 <p>Thumper uses the <code>Futura_PT</code> font. Due to liscencing this font cannot be redistributed.</p>
-<h3 id="default-font-load-order"><a class="header" href="#default-font-load-order">Default font load order</a></h3>
+<p>The first font loaded should be the english font. The first loaded font is conditionally chosen.</p>
+<h3 id="first-font-load"><a class="header" href="#first-font-load">First font load</a></h3>
 <ol>
 <li><code>fonts/Futura_PT_Heavy.ttf</code></li>
 <li><code>fonts/NotoSans-Bold.ttf</code></li>
 </ol>
-<p>To do something else edit the <code>Font</code> global inside <code>scripts/config.lua</code>.</p>
+<p>Additionally more fonts may be loaded to support more languages.
+Currently <code>fonts/NotoSansKR-Bold.ttf</code> is loaded.</p>
+<p>To do something else edit the <code>Fonts</code> global inside <code>scripts/config.lua</code>.</p>
 
                     </main>
 

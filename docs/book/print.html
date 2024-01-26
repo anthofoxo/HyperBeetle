@@ -89,7 +89,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="index.html">Introduction</a></li><li class="chapter-item expanded affix "><li class="part-title">General Guide</li><li class="chapter-item expanded "><a href="build.html"><strong aria-hidden="true">1.</strong> Building</a></li><li class="chapter-item expanded "><a href="glsl.html"><strong aria-hidden="true">2.</strong> Custom GLSL stntax</a></li><li class="chapter-item expanded "><a href="deps.html"><strong aria-hidden="true">3.</strong> Dependencies</a></li><li class="chapter-item expanded "><a href="hardware_requirements.html"><strong aria-hidden="true">4.</strong> Dependencies</a></li><li class="chapter-item expanded "><a href="profiling.html"><strong aria-hidden="true">5.</strong> Profiling</a></li><li class="chapter-item expanded "><a href="rdoc.html"><strong aria-hidden="true">6.</strong> Renderdoc</a></li><li class="chapter-item expanded "><a href="fonts.html"><strong aria-hidden="true">7.</strong> Fonts</a></li><li class="chapter-item expanded "><a href="additional_documents.html"><strong aria-hidden="true">8.</strong> Additional documents</a></li><li class="chapter-item expanded "><a href="todo.html"><strong aria-hidden="true">9.</strong> Todos</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="credits.html">Credits and Contributors</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="index.html">Introduction</a></li><li class="chapter-item expanded affix "><li class="part-title">General Guide</li><li class="chapter-item expanded "><a href="build.html"><strong aria-hidden="true">1.</strong> Building</a></li><li class="chapter-item expanded "><a href="glsl.html"><strong aria-hidden="true">2.</strong> Custom GLSL stntax</a></li><li class="chapter-item expanded "><a href="deps.html"><strong aria-hidden="true">3.</strong> Dependencies</a></li><li class="chapter-item expanded "><a href="hardware_requirements.html"><strong aria-hidden="true">4.</strong> Hardware Requirements</a></li><li class="chapter-item expanded "><a href="profiling.html"><strong aria-hidden="true">5.</strong> Profiling</a></li><li class="chapter-item expanded "><a href="rdoc.html"><strong aria-hidden="true">6.</strong> Renderdoc</a></li><li class="chapter-item expanded "><a href="fonts.html"><strong aria-hidden="true">7.</strong> Fonts</a></li><li class="chapter-item expanded "><a href="additional_documents.html"><strong aria-hidden="true">8.</strong> Additional documents</a></li><li class="chapter-item expanded "><a href="todo.html"><strong aria-hidden="true">9.</strong> Todos</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="credits.html">Credits and Contributors</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -196,6 +196,11 @@
 <pre><code class="language-glsl">[[vert]] void main(void) {}
 [[frag]] void main(void) {}
 </code></pre>
+<h3 id="tokens"><a class="header" href="#tokens">Tokens</a></h3>
+<p>Tokens match premake syntax for tokens. They are simply placeholders that get swapped at compiletime.</p>
+<ul>
+<li><code>%{engine_version}</code> MAY get changed to <code>1.0.0</code>.</li>
+</ul>
 <h3 id="in--out--varying-modifications"><a class="header" href="#in--out--varying-modifications">in / out / varying modifications</a></h3>
 <p>Varying was removed when other shader types such as geometry shaders were introduced. HyperBeetle only supports vertex and fragment shaders.</p>
 <p><code>in</code> and <code>out</code> type qualifiers are conditionally removed based on shader stages. This changes their semantic meaning.</p>
@@ -248,6 +253,11 @@ This does <strong>NOT</strong> refer to a file name. This refers to the name ass
 <li><a href="https://github.com/memononen/nanovg/tree/f93799c078fa11ed61c078c65a53914c8782c00b">NanoVG f93799c</a></li>
 <li><a href="https://github.com/gabime/spdlog/tree/v1.13.0">Spdlog v1.13.0</a></li>
 </ul>
+<h2 id="update-notes"><a class="header" href="#update-notes">Update notes</a></h2>
+<ul>
+<li>GLM receently released <a href="https://github.com/g-truc/glm/releases/tag/1.0.0">1.0.0</a>; Should consider updating.</li>
+<li>Our assimp is a little dated, should consider updating it soon</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="hardware-requirements"><a class="header" href="#hardware-requirements">Hardware Requirements</a></h1>
 <p>OpenGL 3.3 is required. (Shader Model 4.0)</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="profiling"><a class="header" href="#profiling">Profiling</a></h1>
@@ -274,20 +284,25 @@ This does <strong>NOT</strong> refer to a file name. This refers to the name ass
 <p>The debug ui will contains a list of captures. If you're running windows. You can simply click an item in this list to open renderdoc.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
 <p>Thumper uses the <code>Futura_PT</code> font. Due to liscencing this font cannot be redistributed.</p>
-<h3 id="default-font-load-order"><a class="header" href="#default-font-load-order">Default font load order</a></h3>
+<p>The first font loaded should be the english font. The first loaded font is conditionally chosen.</p>
+<h3 id="first-font-load"><a class="header" href="#first-font-load">First font load</a></h3>
 <ol>
 <li><code>fonts/Futura_PT_Heavy.ttf</code></li>
 <li><code>fonts/NotoSans-Bold.ttf</code></li>
 </ol>
-<p>To do something else edit the <code>Font</code> global inside <code>scripts/config.lua</code>.</p>
+<p>Additionally more fonts may be loaded to support more languages.
+Currently <code>fonts/NotoSansKR-Bold.ttf</code> is loaded.</p>
+<p>To do something else edit the <code>Fonts</code> global inside <code>scripts/config.lua</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="additonal-documents"><a class="header" href="#additonal-documents">Additonal Documents</a></h1>
 <ul>
-<li>https://docs.google.com/document/d/13Na2sUzkChSTUCY5kHrDYR79Hml-OptMXTQgCsQu0ak/edit?usp=sharing</li>
-<li>https://docs.google.com/document/d/1iPq4pAJPeORzJSjc47Vb-HA65wEZixVflS98EZ7-oEo/edit?usp=sharing</li>
+<li><a href="https://docs.google.com/document/d/13Na2sUzkChSTUCY5kHrDYR79Hml-OptMXTQgCsQu0ak/edit?usp=sharing">leaf_format</a></li>
+<li><a href="https://docs.google.com/document/d/1iPq4pAJPeORzJSjc47Vb-HA65wEZixVflS98EZ7-oEo/edit?usp=sharing">thumper editor values and things</a></li>
+<li><a href="https://docs.google.com/spreadsheets/d/1s6oyaBBr_-TNhhyM6HX9OvSop9LEYA6JoQ-EgM-wkFY/edit?usp=sharing">thumper editor objects</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="todos"><a class="header" href="#todos">TODOS</a></h1>
 <ul>
 <li>Add <code>WinMain</code> support.</li>
+<li>Better language support.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="credits-and-contributors"><a class="header" href="#credits-and-contributors">Credits and Contributors</a></h1>
 <p>Here is a list of the contributors who have helped improving HyperBeetle. Big shout-out to them!</p>

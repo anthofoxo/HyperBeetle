@@ -13,3 +13,7 @@
 * [Assimp v5.0.1](https://github.com/assimp/assimp/tree/v5.0.1)
 * [NanoVG f93799c](https://github.com/memononen/nanovg/tree/f93799c078fa11ed61c078c65a53914c8782c00b)
 * [Spdlog v1.13.0](https://github.com/gabime/spdlog/tree/v1.13.0)
+
+## Update notes
+* GLM receently released [1.0.0](https://github.com/g-truc/glm/releases/tag/1.0.0); Should consider updating.
+* Our assimp is a little dated, should consider updating it soon

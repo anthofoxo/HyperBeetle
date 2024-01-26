@@ -14,6 +14,11 @@ Functions may use C++ style annotations. `[[vert]]` and `[[frag]]`. Annotation a
 [[frag]] void main(void) {}
 ```
 
+### Tokens
+Tokens match premake syntax for tokens. They are simply placeholders that get swapped at compiletime.
+
+* `%{engine_version}` MAY get changed to `1.0.0`.
+
 ### in / out / varying modifications
 Varying was removed when other shader types such as geometry shaders were introduced. HyperBeetle only supports vertex and fragment shaders.
 
