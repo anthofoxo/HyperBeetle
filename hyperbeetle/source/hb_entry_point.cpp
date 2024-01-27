@@ -1134,32 +1134,44 @@ public:
 			//}
 
 			if (Get().GetUserPtr<Application>().mKeys.contains(GLFW_KEY_Z)) {
-				hyperbeetle::Transform cp0;
-				hyperbeetle::Transform cp1;
+			
+				// Calculate current track state into world space and store the transforms
+				std::vector<hyperbeetle::Transform> trackTransforms;
+
+				hyperbeetle::Transform translatedTransform;
+
+				trackTransforms.push_back(translatedTransform);
+
+				ImGui::Begin("Trackvals");
 
 				for (int i = 0; i < objtransforms.size(); ++i) {
 
-					
+					ImGui::PushID(i);
+					ImGui::PushItemWidth(300);
+					ImGui::DragFloat("##a", &objtransforms[i].pitch);
+					ImGui::SameLine();
+					ImGui::PushItemWidth(300);
+					ImGui::DragFloat("##b", &objtransforms[i].yaw);
+					ImGui::PopID();
 
-					cp0 = cp1;
+					translatedTransform.Rotate(glm::radians(objtransforms[i].yaw), glm::vec3(0, 1, 0));
+					translatedTransform.Rotate(glm::radians(objtransforms[i].pitch), glm::vec3(1, 0, 0));
+					translatedTransform.Translate(glm::vec3(0, 0, -24));
 
-					cp1.Rotate(glm::radians(objtransforms[i].yaw), glm::vec3(0, 1, 0));
-					cp1.Rotate(glm::radians(objtransforms[i].pitch), glm::vec3(1, 0, 0));
-					cp1.Translate(glm::vec3(0, 0, -12));
+					trackTransforms.push_back(translatedTransform);
 
-					hyperbeetle::Transform cp2 = cp1;
-					if ((i + 1) < objtransforms.size()) {
-						cp2.Rotate(glm::radians(objtransforms[i + 1].yaw), glm::vec3(0, 1, 0));
-						cp2.Rotate(glm::radians(objtransforms[i + 1].pitch), glm::vec3(1, 0, 0));
-						cp2.Translate(glm::vec3(0, 0, -12));
-					}
+				}
 
-				
+				ImGui::End();
 
-					glm::mat4 matrix = cp0.Get();
+				for (int i = 0; i < trackTransforms.size(); ++i) {
 
-					ImGuizmo::SetID(i * 2 + 1);
-					if (ImGuizmo::Manipulate(glm::value_ptr(viewMatrix), glm::value_ptr(projection), currentOp, ImGuizmo::MODE::LOCAL, glm::value_ptr(matrix))) {
+					hyperbeetle::Transform start = trackTransforms[i];
+
+					glm::mat4 mat = start.Get();
+
+					ImGuizmo::SetID(i);
+					if (ImGuizmo::Manipulate(glm::value_ptr(viewMatrix), glm::value_ptr(projection), currentOp, ImGuizmo::MODE::LOCAL, glm::value_ptr(mat))) {
 
 					}
 				}
@@ -1247,15 +1259,19 @@ public:
 
 				for (int i = 0; i < trackTransforms.size(); ++i) {
 
-					hyperbeetle::Transform tn1 = trackTransforms[glm::max<int>(i - 1, 0)];
-					hyperbeetle::Transform t0 = trackTransforms[glm::min<int>(i + 0, trackTransforms.size() - 1)];
-					hyperbeetle::Transform t1 = trackTransforms[glm::min<int>(i + 1, trackTransforms.size() - 1)];
-					hyperbeetle::Transform t2 = trackTransforms[glm::min<int>(i + 2, trackTransforms.size() - 1)];
+					hyperbeetle::Transform start = trackTransforms[i];
+					hyperbeetle::Transform end = trackTransforms[glm::min<int>(i + 1, trackTransforms.size() - 1)];
+					hyperbeetle::Transform next = trackTransforms[glm::min<int>(i + 2, trackTransforms.size() - 1)];
+					hyperbeetle::Transform next2 = trackTransforms[glm::min<int>(i + 3, trackTransforms.size() - 1)];
 
-					program.UniformMat4f("ws0", t0.Get());
-					program.UniformMat4f("ws1", t0.Get());
-					program.UniformMat4f("ws2", t1.Get());
-					program.UniformMat4f("ws3", t1.Get());
+					hyperbeetle::Transform cp0 = hyperbeetle::Transform::InterpolateLinear(start, next, 1.0f / 6.0f);
+					hyperbeetle::Transform cp1 = hyperbeetle::Transform::InterpolateLinear(end, next2, -1.0f / 6.0f);
+		
+
+					program.UniformMat4f("ws0", start.Get());
+					program.UniformMat4f("ws1", cp0.Get());
+					program.UniformMat4f("ws2", cp1.Get());
+					program.UniformMat4f("ws3", end.Get());
 					trackMesh.SubmitDrawCall();
 				}
 
