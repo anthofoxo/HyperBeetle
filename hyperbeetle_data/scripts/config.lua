@@ -1,27 +1,7 @@
 function file_exists(name)
     local f=io.open(name,"r")
     if f~=nil then io.close(f) return true else return false end
- end
- 
-
--- Specify language constants
--- Uses ISO 639-2
-Lang = {}
-Lang["eng"] = {}
-Lang["eng"]["title"] = "HyperBeetle"
-Lang["eng"]["menu"] = {}
-Lang["eng"]["menu"]["play"] = "Play"
-Lang["eng"]["menu"]["option"] = "Options"
-Lang["eng"]["menu"]["editor"] = "Editor"
-Lang["eng"]["menu"]["quit"] = "Quit"
-
-Lang["kor"] = {}
-Lang["kor"]["title"] = "강남스타일" -- Change this before release plz :3
-Lang["kor"]["menu"] = {}
-Lang["kor"]["menu"]["play"] = "놀다"
-Lang["kor"]["menu"]["option"] = "옵션"
-Lang["kor"]["menu"]["editor"] = "편집자"
-Lang["kor"]["menu"]["quit"] = "출구"
+end
 
 Fonts = {}
 

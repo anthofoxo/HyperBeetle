@@ -16,6 +16,7 @@ namespace hyperbeetle {
 
 		static Transform InterpolateLinear(Transform const& a, Transform const& b, float t);
 		static Transform InterpolateQuadratic(Transform const& a, Transform const& b, Transform const& c, float t);
+		static Transform InterpolateCubic(Transform const& a, Transform const& b, Transform const& c, Transform const& d, float t);
 	public:
 		glm::vec3 translation = glm::zero<glm::vec3>();
 		glm::quat orientation = glm::identity<glm::quat>();

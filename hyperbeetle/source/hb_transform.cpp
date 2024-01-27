@@ -59,4 +59,8 @@ namespace hyperbeetle {
 	Transform Transform::InterpolateQuadratic(Transform const& a, Transform const& b, Transform const& c, float t) {
 		return InterpolateLinear(InterpolateLinear(a, b, t), InterpolateLinear(b, c, t), t);
 	}
+
+	Transform Transform::InterpolateCubic(Transform const& a, Transform const& b, Transform const& c, Transform const& d, float t) {
+		return InterpolateLinear(InterpolateQuadratic(a, b, c, t), InterpolateQuadratic(b, c, d, t), t);
+	}
 }

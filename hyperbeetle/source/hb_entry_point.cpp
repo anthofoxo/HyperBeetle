@@ -424,36 +424,39 @@ CustomGameContent LoadPacks() {
 	for (auto& [k, v] : content.packs) {
 		std::string path = std::format("pack/{}/level", k);
 
-		for (auto& entry : std::filesystem::directory_iterator(path)) {
-			Level level;
-			level.origin = &v;
-			level.id = v.nspace + '.' + entry.path().stem().generic_string();
+		if (std::filesystem::exists(path)) {
 
-			auto fileref = entry.path().generic_string();
-			lua_State* L = luaL_newstate();
-			luaL_dofile(L, fileref.c_str());
-			lua_getglobal(L, "level_name");
-			level.level_name = lua_tostring(L, -1);
-			lua_getglobal(L, "difficulty");
-			level.difficulty = lua_tointeger(L, -1);
-			lua_getglobal(L, "description");
-			level.description = lua_tostring(L, -1);
-			lua_getglobal(L, "author");
-			level.author = lua_tostring(L, -1);
-			lua_getglobal(L, "bpm");
-			level.bpm = lua_tonumber(L, -1);
-			lua_pop(L, 5);
-			lua_close(L);
+			for (auto& entry : std::filesystem::directory_iterator(path)) {
+				Level level;
+				level.origin = &v;
+				level.id = v.nspace + '.' + entry.path().stem().generic_string();
 
-			spdlog::info("----------------");
-			spdlog::info("\tid: {}", level.id);
-			spdlog::info("\torigin: {}", k);
-			spdlog::info("\tlevel_name: {}", level.level_name);
-			spdlog::info("\tdifficulty: {}", level.difficulty);
-			spdlog::info("\tdescription: {}", level.description);
-			spdlog::info("\tauthor: {}", level.author);
-			spdlog::info("\tbpm: {}", level.bpm);
-			content.levels.emplace(std::make_pair(level.id, level));
+				auto fileref = entry.path().generic_string();
+				lua_State* L = luaL_newstate();
+				luaL_dofile(L, fileref.c_str());
+				lua_getglobal(L, "level_name");
+				level.level_name = lua_tostring(L, -1);
+				lua_getglobal(L, "difficulty");
+				level.difficulty = lua_tointeger(L, -1);
+				lua_getglobal(L, "description");
+				level.description = lua_tostring(L, -1);
+				lua_getglobal(L, "author");
+				level.author = lua_tostring(L, -1);
+				lua_getglobal(L, "bpm");
+				level.bpm = lua_tonumber(L, -1);
+				lua_pop(L, 5);
+				lua_close(L);
+
+				spdlog::info("----------------");
+				spdlog::info("\tid: {}", level.id);
+				spdlog::info("\torigin: {}", k);
+				spdlog::info("\tlevel_name: {}", level.level_name);
+				spdlog::info("\tdifficulty: {}", level.difficulty);
+				spdlog::info("\tdescription: {}", level.description);
+				spdlog::info("\tauthor: {}", level.author);
+				spdlog::info("\tbpm: {}", level.bpm);
+				content.levels.emplace(std::make_pair(level.id, level));
+			}
 		}
 	}
 
@@ -485,6 +488,79 @@ static void dumpstack(lua_State* L) {
 		}
 	}
 }
+
+
+
+struct LanguageMap {
+	struct MultiStringHash final
+	{
+		using hash_type = std::hash<std::string_view>;
+		using is_transparent = void;
+
+		std::size_t operator()(const char* str) const { return hash_type{}(str); }
+		std::size_t operator()(std::string_view str) const { return hash_type{}(str); }
+		std::size_t operator()(std::string const& str) const { return hash_type{}(str); }
+	};
+
+	std::unordered_map<std::string, std::string, MultiStringHash, std::equal_to<>> map;
+
+	// table to process is at -1
+	static void ProcessLangTable(std::unordered_map<std::string, std::string, MultiStringHash, std::equal_to<>>& langmap, std::string prefix, lua_State* L) {
+		lua_pushnil(L);
+		while (lua_next(L, -2)) {
+
+
+
+			dumpstack(L);
+
+			// If key is not string, this entry is invalid
+			if (!lua_isstring(L, -2))
+				continue;
+
+			// if value is a string
+			if (lua_isstring(L, -1)) {
+				// add to langmap, acounting for prefixes
+				langmap[prefix + std::string(lua_tostring(L, -2))] = lua_tostring(L, -1);
+			}
+
+			// if value is a table, recurse
+			if (lua_istable(L, -1)) {
+				std::string newprefix;
+				if (prefix.empty()) newprefix = std::format("{}.", lua_tostring(L, -2));
+				else newprefix = std::format("{}{}", prefix, lua_tostring(L, -2));
+
+				lua_pushvalue(L, -1); // push the value(table) to top
+				ProcessLangTable(langmap, newprefix, L);
+				// The pushed table is popped from lang recuse
+			}
+
+			lua_pushvalue(L, -2); // push for next call
+
+			lua_pop(L, 2); // Pop key, value
+		}
+
+
+		lua_pop(L, 1); // Pop original table
+	}
+
+
+	void LoadLang(std::string resource) {
+		map.clear();
+		lua_State* L = luaL_newstate();
+		luaL_openlibs(L);
+		luaL_dofile(L, resource.c_str());
+		ProcessLangTable(map, "", L);
+		lua_close(L);
+	}
+
+	std::string_view Get(std::string_view key) {
+		auto it = map.find(key);
+		if (it == map.end()) return key;
+		return it->second;
+	}
+};
+
+static LanguageMap kLanguageMap;
 
 class Application final {
 public:
@@ -522,6 +598,27 @@ public:
 		}
 
 		Destroy();
+	}
+
+	static void dumptable(lua_State* L) {
+		lua_pushnil(L);
+
+		int primary = -1;
+
+		while (lua_next(L, -2)) {
+			lua_pushvalue(L, -2);
+			const char* key = lua_tostring(L, -1);
+			const char* value = lua_tostring(L, -2);
+
+			bool istable = lua_istable(L, -2);
+
+			if(!istable)
+				spdlog::info("{}: {}", key, value);
+			else 
+				spdlog::info("{}: {}", key, "table");
+
+			lua_pop(L, 2);
+		}
 	}
 	
 	void Init() {
@@ -714,8 +811,14 @@ public:
 	hyperbeetle::Transform targetTrackView;
 	hyperbeetle::Transform currentTrackView;
 
-	std::vector<hyperbeetle::Transform> objtransforms;
-	std::vector<hyperbeetle::Transform> transforms;
+	struct EditorTrackPoint {
+		float yaw = 0.0f;
+		float pitch = 1.25f;
+	};
+
+	//std::vector<hyperbeetle::Transform> objtransforms;
+	std::vector<EditorTrackPoint> objtransforms;
+	//std::vector<hyperbeetle::Transform> transforms;
 
 	hyperbeetle::Transform viewTransform;
 	GLuint skyboxCubemap;
@@ -752,47 +855,58 @@ public:
 			split(track_turn_string, initSplit, ';');
 			objtransforms.resize(std::stoi(initSplit[0]));
 
-			for (auto& val : objtransforms) {
-				val.Rotate(glm::radians(1.25f), glm::vec3(1, 0, 0));
-				val.Translate(glm::vec3(0, 0, -20));
-			}
-
 			track_turn_string = initSplit[1];
 			split(track_turn_string, initSplit, ',');
-
+			
 			std::vector<std::string> map;
-
+			
 			for (auto& val : initSplit) {
 				map.clear();
 				split(val, map, ':');
-				objtransforms[std::stoi(map[0])].Reset();
-				objtransforms[std::stoi(map[0])].Rotate(glm::radians(std::stof(map[1])), glm::vec3(0, 1, 0));
-				objtransforms[std::stoi(map[0])].Rotate(glm::radians(3.0f), glm::vec3(1, 0, 0));
-				objtransforms[std::stoi(map[0])].Translate(glm::vec3(0, 0, -10));
+				objtransforms[std::stoi(map[0])].yaw = std::stof(map[1]);
 			}
 
-			// Apply transformations along track length
-
-			hyperbeetle::Transform current;
-			transforms.emplace_back(current);
-
-			for (int i = 0; i < objtransforms.size(); ++i) {
-
-				auto intp = current;
-
-				if (i > 0) {
-					auto transNext = hyperbeetle::Transform();
-					transNext.Set(current.Get() * objtransforms[i - 1].Get());
-
-					intp = hyperbeetle::Transform::InterpolateLinear(current, transNext, 0.5f);
-				}
-
-				current.Set(current.Get() * objtransforms[i].Get()); // Transform by track
-
-				transforms.emplace_back(intp);
-
-				transforms.emplace_back(current); // Deuplate is the control point, ignored
-			}
+			// for (auto& val : objtransforms) {
+			// 	val.Rotate(glm::radians(1.25f), glm::vec3(1, 0, 0));
+			// 	val.Translate(glm::vec3(0, 0, -20));
+			// }
+			// 
+			// track_turn_string = initSplit[1];
+			// split(track_turn_string, initSplit, ',');
+			// 
+			// std::vector<std::string> map;
+			// 
+			// for (auto& val : initSplit) {
+			// 	map.clear();
+			// 	split(val, map, ':');
+			// 	int index = std::stoi(map[0]);
+			// 	objtransforms[index].Rotate(glm::radians(std::stof(map[1])), glm::vec3(0, 1, 0));
+			// 	objtransforms[index].Rotate(glm::radians(3.0f), glm::vec3(1, 0, 0));
+			// 	objtransforms[index].Translate(glm::vec3(0, 0, -12));
+			// }
+			// 
+			// // Apply transformations along track length
+			// 
+			// hyperbeetle::Transform current;
+			// transforms.emplace_back(current);
+			// 
+			// for (int i = 0; i < objtransforms.size(); ++i) {
+			// 
+			// 	auto intp = current;
+			// 
+			// 	if (i > 0) {
+			// 		auto transNext = hyperbeetle::Transform();
+			// 		transNext.Set(current.Get() * objtransforms[i - 1].Get());
+			// 
+			// 		intp = hyperbeetle::Transform::InterpolateLinear(current, transNext, 0.5f);
+			// 	}
+			// 
+			// 	current.Set(current.Get() * objtransforms[i].Get()); // Transform by track
+			// 
+			// 	transforms.emplace_back(intp);
+			// 
+			// 	transforms.emplace_back(current); // Deuplate is the control point, ignored
+			// }
 		}
 
 		trackMesh = LoadMeshI("meshes/track_test.obj").value();
@@ -972,23 +1086,23 @@ public:
 				++valOffset;
 			}
 
-			if (controlPointStart + 2 >= transforms.size()) {
-				ridingTrack = false;
-			}
-			else
-			{
-				targetTrackView = hyperbeetle::Transform::InterpolateQuadratic(transforms[controlPointStart], transforms[controlPointStart + 1], transforms[controlPointStart + 2], bpmTimer);
-				targetTrackView.Translate(glm::vec3(0, 0.5f, 5));
-
-				// 3 unity above track relative
-				//mixed.Translate(glm::vec3(0, 3, 5));
-
-				// mix between trackviews
-
-				currentTrackView = hyperbeetle::Transform::InterpolateLinear(currentTrackView, targetTrackView, 0.5f);
-
-				viewMatrix = currentTrackView.GetInverse();
-			}
+			//if (controlPointStart + 2 >= transforms.size()) {
+			//	ridingTrack = false;
+			//}
+			//else
+			//{
+			//	targetTrackView = hyperbeetle::Transform::InterpolateQuadratic(transforms[controlPointStart], transforms[controlPointStart + 1], transforms[controlPointStart + 2], bpmTimer);
+			//	targetTrackView.Translate(glm::vec3(0, 0.5f, 5));
+			//
+			//	// 3 unity above track relative
+			//	//mixed.Translate(glm::vec3(0, 3, 5));
+			//
+			//	// mix between trackviews
+			//
+			//	currentTrackView = hyperbeetle::Transform::InterpolateLinear(currentTrackView, targetTrackView, 0.5f);
+			//
+			//	viewMatrix = currentTrackView.GetInverse();
+			//}
 		}
 
 		//glm::mat4 projection = glm::perspectiveFov<float>(glm::radians(90.0f), w, h, 0.1f, 1024.0f);
@@ -1009,12 +1123,44 @@ public:
 			ImGuizmo::SetDrawlist();
 			ImGuizmo::SetRect(min.x + ImGui::GetWindowPos().x, min.y + ImGui::GetWindowPos().y, max.x - min.x, max.y - min.y);
 
+			//if (Get().GetUserPtr<Application>().mKeys.contains(GLFW_KEY_Z)) {
+			//	for (int i = 0; i < transforms.size(); ++i) {
+			//		glm::mat4 mat = transforms[i].Get();
+			//		ImGuizmo::SetID(i);
+			//		if (ImGuizmo::Manipulate(glm::value_ptr(viewMatrix), glm::value_ptr(projection), currentOp, ImGuizmo::MODE::LOCAL, glm::value_ptr(mat))) {
+			//			transforms[i].Set(mat);
+			//		}
+			//	}
+			//}
+
 			if (Get().GetUserPtr<Application>().mKeys.contains(GLFW_KEY_Z)) {
-				for (int i = 0; i < transforms.size(); ++i) {
-					glm::mat4 mat = transforms[i].Get();
-					ImGuizmo::SetID(i);
-					if (ImGuizmo::Manipulate(glm::value_ptr(viewMatrix), glm::value_ptr(projection), currentOp, ImGuizmo::MODE::LOCAL, glm::value_ptr(mat))) {
-						transforms[i].Set(mat);
+				hyperbeetle::Transform cp0;
+				hyperbeetle::Transform cp1;
+
+				for (int i = 0; i < objtransforms.size(); ++i) {
+
+					
+
+					cp0 = cp1;
+
+					cp1.Rotate(glm::radians(objtransforms[i].yaw), glm::vec3(0, 1, 0));
+					cp1.Rotate(glm::radians(objtransforms[i].pitch), glm::vec3(1, 0, 0));
+					cp1.Translate(glm::vec3(0, 0, -12));
+
+					hyperbeetle::Transform cp2 = cp1;
+					if ((i + 1) < objtransforms.size()) {
+						cp2.Rotate(glm::radians(objtransforms[i + 1].yaw), glm::vec3(0, 1, 0));
+						cp2.Rotate(glm::radians(objtransforms[i + 1].pitch), glm::vec3(1, 0, 0));
+						cp2.Translate(glm::vec3(0, 0, -12));
+					}
+
+				
+
+					glm::mat4 matrix = cp0.Get();
+
+					ImGuizmo::SetID(i * 2 + 1);
+					if (ImGuizmo::Manipulate(glm::value_ptr(viewMatrix), glm::value_ptr(projection), currentOp, ImGuizmo::MODE::LOCAL, glm::value_ptr(matrix))) {
+
 					}
 				}
 			}
@@ -1069,13 +1215,57 @@ public:
 			glCullFace(GL_BACK);
 			{
 				ZoneScopedN("Draw track");
-				for (int i = 0; i < transforms.size() - 2; i += 2) {
 
-					program.UniformMat4f("ws0", transforms[i + 0].Get());
-					program.UniformMat4f("ws1", transforms[i + 1].Get());
-					program.UniformMat4f("ws2", transforms[i + 2].Get());
+				// Calculate current track state into world space and store the transforms
+				std::vector<hyperbeetle::Transform> trackTransforms;
+				
+				hyperbeetle::Transform translatedTransform;
+
+				trackTransforms.push_back(translatedTransform);
+
+				ImGui::Begin("Trackvals");
+
+				for (int i = 0; i < objtransforms.size(); ++i) {
+
+					ImGui::PushID(i);
+					ImGui::PushItemWidth(300);
+					ImGui::DragFloat("##a", &objtransforms[i].pitch);
+					ImGui::SameLine();
+					ImGui::PushItemWidth(300);
+					ImGui::DragFloat("##b", &objtransforms[i].yaw);
+					ImGui::PopID();
+
+					translatedTransform.Rotate(glm::radians(objtransforms[i].yaw), glm::vec3(0, 1, 0));
+					translatedTransform.Rotate(glm::radians(objtransforms[i].pitch), glm::vec3(1, 0, 0));
+					translatedTransform.Translate(glm::vec3(0, 0, -24));
+
+					trackTransforms.push_back(translatedTransform);
+			
+				}
+
+				ImGui::End();
+
+				for (int i = 0; i < trackTransforms.size(); ++i) {
+
+					hyperbeetle::Transform tn1 = trackTransforms[glm::max<int>(i - 1, 0)];
+					hyperbeetle::Transform t0 = trackTransforms[glm::min<int>(i + 0, trackTransforms.size() - 1)];
+					hyperbeetle::Transform t1 = trackTransforms[glm::min<int>(i + 1, trackTransforms.size() - 1)];
+					hyperbeetle::Transform t2 = trackTransforms[glm::min<int>(i + 2, trackTransforms.size() - 1)];
+
+					program.UniformMat4f("ws0", t0.Get());
+					program.UniformMat4f("ws1", t0.Get());
+					program.UniformMat4f("ws2", t1.Get());
+					program.UniformMat4f("ws3", t1.Get());
 					trackMesh.SubmitDrawCall();
 				}
+
+				//or (int i = 0; i < transforms.size() - 2; i += 2) {
+				//
+				//	program.UniformMat4f("ws0", cp0.Get());
+				//	program.UniformMat4f("ws1", mid.Get());
+				//	program.UniformMat4f("ws2", cp1.Get());
+				//	trackMesh.SubmitDrawCall();
+				//
 			}
 
 			glDisable(GL_CULL_FACE);
@@ -1153,34 +1343,17 @@ public:
 class MenuState : public hyperbeetle::State {
 public:
 	void Init() override {
-		lua_State* L = Get().GetUserPtr<Application>().L;
-		lua_getglobal(L, "Lang");
-		lua_getfield(L, -1, "eng"); // selected language id
-		lua_getfield(L, -1, "title");
-		title = lua_tostring(L, -1); lua_pop(L, 1);
-		lua_getfield(L, -1, "menu");
-		lua_getfield(L, -1, "play");
-		std::string play_text = lua_tostring(L, -1); lua_pop(L, 1);
-		lua_getfield(L, -1, "option");
-		std::string option_text = lua_tostring(L, -1); lua_pop(L, 1);
-		lua_getfield(L, -1, "editor");
-		std::string editor_text = lua_tostring(L, -1); lua_pop(L, 1);
-		lua_getfield(L, -1, "quit");
-		std::string quit_text = lua_tostring(L, -1); lua_pop(L, 1);
-		lua_pop(L, 3);
 
 		options = {
-			MenuOption(play_text, false, nullptr),
-			MenuOption(option_text, false, nullptr),
-			MenuOption(editor_text, true, std::bind(&MenuState::OpenEditor, this)),
-			MenuOption(quit_text, true, std::bind(&MenuState::Quit, this))
+			MenuOption(std::string(kLanguageMap.Get("menu.play")), false, nullptr),
+			MenuOption(std::string(kLanguageMap.Get("menu.option")), false, nullptr),
+			MenuOption(std::string(kLanguageMap.Get("menu.editor")), true, std::bind(&MenuState::OpenEditor, this)),
+			MenuOption(std::string(kLanguageMap.Get("menu.quit")), true, std::bind(&MenuState::Quit, this))
 		};
 	}
 
 	~MenuState() {
 	}
-
-	std::string title;
 
 	struct MenuOption {
 		std::string name;
@@ -1212,6 +1385,8 @@ public:
 
 		NVGcontext* vg = Get().GetUserPtr<Application>().vg;
 		nvgBeginFrame(vg, w, h, 1);
+
+		std::string_view title = kLanguageMap.Get("title");
 
 		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 		nvgFillColor(vg, { 1, 0.0f, 0.0f, 1 });
@@ -1311,14 +1486,6 @@ public:
 		ma_sound_set_volume(&sound, 0.0f);
 		ma_sound_set_looping(&sound, true);
 		ma_sound_start(&sound);
-
-		lua_State* L = Get().GetUserPtr<Application>().L;
-
-		lua_getglobal(L, "Lang");
-		lua_getfield(L, -1, "eng"); //  // selected language id
-		lua_getfield(L, -1, "title");
-		title = lua_tostring(L, -1);
-		lua_pop(L, 3);
 	}
 
 	~LogoState() {
@@ -1349,10 +1516,12 @@ public:
 		NVGcontext* vg = Get().GetUserPtr<Application>().vg;
 		nvgBeginFrame(vg, w, h, 1);
 
+		std::string_view langTitle = kLanguageMap.Get("title");
+
 		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 		nvgFillColor(vg, { 1, 0.3f, 0.1f, 1 });
 		nvgFontSize(vg, std::lerp<float>((float)h / 10.0f, (float)h / 5.0f, timer));
-		nvgText(vg, w / 2, h / 2, title.data(), title.data() + title.size());
+		nvgText(vg, w / 2, h / 2, langTitle.data(), langTitle.data() + langTitle.size());
 
 		nvgEndFrame(vg);
 
@@ -1391,7 +1560,6 @@ public:
 	}
 
 	ma_sound sound;
-	std::string title;
 	double timer = 0;
 	hyperbeetle::ShaderProgram glitchProgram;
 	RenderTarget target;
@@ -1404,6 +1572,8 @@ void AppMain() {
 	hyperbeetle::SetupLogger();
 	spdlog::info("Starting engine");
 	hyperbeetle::AttachRenderdoc();
+
+	kLanguageMap.LoadLang("pack/core/lang/eng.lua");
 
 	kGameContent = LoadPacks();
 
