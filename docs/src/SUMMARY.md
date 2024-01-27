@@ -12,6 +12,7 @@
 - [Fonts](./fonts.md)
 - [Additional documents](./additional_documents.md)
 - [Todos](./todo.md)
+- [Multilingual Support](./multilingual.md)
 
 -----------
 

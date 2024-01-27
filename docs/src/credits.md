@@ -8,3 +8,6 @@ If you feel you're missing from this list, feel free to add yourself in a PR.
 
 ## Sound effects / Sound samples
 * JLMusic
+
+## Language translations
+* [AnthoFoxo](https://anthofoxo.xyz/)
