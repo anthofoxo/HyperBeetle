@@ -1,4 +1,4 @@
-#include "hb_window.hpp"
+#include "he_window.hpp"
 
 #include <stdexcept>
 
@@ -8,7 +8,7 @@
 #include <tracy/Tracy.hpp>
 #include <spdlog/spdlog.h>
 
-namespace hyperbeetle {
+namespace hyperengine {
 	namespace {
 		unsigned short kWindowCount = 0;
 

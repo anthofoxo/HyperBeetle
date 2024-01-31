@@ -4,7 +4,7 @@
 
 extern "C" typedef struct GLFWwindow GLFWwindow;
 
-namespace hyperbeetle {
+namespace hyperengine {
 	class Window final {
 	public:
 		struct CreateInfo final {

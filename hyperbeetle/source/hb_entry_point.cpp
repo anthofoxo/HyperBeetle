@@ -7,13 +7,15 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+// HyperEngine
+#include "hyperengine/he_window.hpp"
+
 // Engine
 #include "hb_state.hpp"
 #include "hb_shader.hpp"
 #include "hb_io.hpp"
 #include "hb_log.hpp"
 #include "hb_transform.hpp"
-#include "hb_window.hpp"
 #include "hb_shader_preprocessor.hpp"
 #include "hb_rdoc.hpp"
 
@@ -577,7 +579,7 @@ public:
 			lastTime = currentTime;
 
 			mLastKeys = mKeys;
-			hyperbeetle::Window::PollEvents();
+			hyperengine::Window::PollEvents();
 
 			BeginGuiFrame();
 
@@ -622,7 +624,7 @@ public:
 	}
 	
 	void Init() {
-		mWindow = hyperbeetle::Window({ .width = 1280, .height = 720, .title = "HyperBeetle by AnthoFoxo" });
+		mWindow = hyperengine::Window({ .width = 1280, .height = 720, .title = "HyperBeetle by AnthoFoxo" });
 
 		TracyGpuContext;
 
@@ -736,7 +738,7 @@ public:
 	double mDeltaTime = 1.0;
 	std::unordered_set<int> mKeys;
 	std::unordered_set<int> mLastKeys;
-	hyperbeetle::Window mWindow;
+	hyperengine::Window mWindow;
 	NVGcontext* vg;
 	std::vector<hyperbeetle::Blob> fontdatas;
 	ma_engine engine;
@@ -1156,7 +1158,7 @@ public:
 
 					translatedTransform.Rotate(glm::radians(objtransforms[i].yaw), glm::vec3(0, 1, 0));
 					translatedTransform.Rotate(glm::radians(objtransforms[i].pitch), glm::vec3(1, 0, 0));
-					translatedTransform.Translate(glm::vec3(0, 0, -24));
+					translatedTransform.Translate(glm::vec3(0, 0, -12));
 
 					trackTransforms.push_back(translatedTransform);
 
@@ -1240,16 +1242,16 @@ public:
 				for (int i = 0; i < objtransforms.size(); ++i) {
 
 					ImGui::PushID(i);
-					ImGui::PushItemWidth(300);
+					ImGui::PushItemWidth(200);
 					ImGui::DragFloat("##a", &objtransforms[i].pitch);
 					ImGui::SameLine();
-					ImGui::PushItemWidth(300);
+					ImGui::PushItemWidth(200);
 					ImGui::DragFloat("##b", &objtransforms[i].yaw);
 					ImGui::PopID();
 
 					translatedTransform.Rotate(glm::radians(objtransforms[i].yaw), glm::vec3(0, 1, 0));
 					translatedTransform.Rotate(glm::radians(objtransforms[i].pitch), glm::vec3(1, 0, 0));
-					translatedTransform.Translate(glm::vec3(0, 0, -24));
+					translatedTransform.Translate(glm::vec3(0, 0, -12));
 
 					trackTransforms.push_back(translatedTransform);
 			
@@ -1267,6 +1269,10 @@ public:
 					hyperbeetle::Transform cp0 = hyperbeetle::Transform::InterpolateLinear(start, next, 1.0f / 6.0f);
 					hyperbeetle::Transform cp1 = hyperbeetle::Transform::InterpolateLinear(end, next2, -1.0f / 6.0f);
 		
+					// P(t) - [1, t, t^2, t^3](1/6)[ 1,  4,  1, 0][P0]
+					//                             [-3,  0,  3, 0][P1]
+					//                             [ 3, -6,  3, 0][P2]
+					//                             [-1,  3, -3, 1][P3]
 
 					program.UniformMat4f("ws0", start.Get());
 					program.UniformMat4f("ws1", cp0.Get());
