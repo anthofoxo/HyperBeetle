@@ -18,30 +18,42 @@ namespace hyperengine {
 	}
 
 	void Window::PollEvents() {
+		ZoneScoped;
 		glfwPollEvents();
 	}
 
 	Window::Window(CreateInfo const& info) {
+		ZoneScoped;
 		if (!glfwSetErrorCallback)
 			glfwSetErrorCallback(&ErrorCallback);
 
-		if (!glfwInit())
-			throw std::runtime_error("Glfw failed to initialize");
+		{
+			ZoneScopedN("glfwInit");
+			if (!glfwInit())
+				throw std::runtime_error("Glfw failed to initialize");
+		}
 
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-		glfwWindowHint(GLFW_SAMPLES, 32);
+		glfwWindowHint(GLFW_SAMPLES, 4);
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
 		try {
-			mHandle = glfwCreateWindow(info.width, info.height, info.title, nullptr, nullptr);
-			if (!mHandle)
-				throw std::runtime_error("Glfw failed to create window");
+			{
+				ZoneScopedN("glfwCreateWindow");
+				mHandle = glfwCreateWindow(info.width, info.height, info.title, nullptr, nullptr);
+				if (!mHandle)
+					throw std::runtime_error("Glfw failed to create window");
+			}
 			
 			glfwMakeContextCurrent(mHandle);
-			if (!gladLoadGL(&glfwGetProcAddress))
-				throw std::runtime_error("Glad failed to load OpenGL function pointers");	
+
+			{
+				ZoneScopedN("gladLoadGL");
+				if (!gladLoadGL(&glfwGetProcAddress))
+					throw std::runtime_error("Glad failed to load OpenGL function pointers");
+			}
 
 			++kWindowCount;
 		}
@@ -65,6 +77,7 @@ namespace hyperengine {
 	}
 
 	Window::~Window() noexcept {
+		ZoneScoped;
 		if (mHandle) {
 			glfwMakeContextCurrent(nullptr);
 			glfwDestroyWindow(mHandle);

@@ -26,12 +26,14 @@ namespace hyperbeetle {
 #ifdef _WIN32
 			HMODULE dylib = nullptr;
 			if (!dylib) dylib = ::GetModuleHandleA("renderdoc.dll");
+#if defined(HE_DEBUG) || defined(HE_RELEASE)
 			if (!dylib) dylib = ::LoadLibraryA("renderdoc.dll");
 			if (!dylib) {
 				CHAR pf[MAX_PATH];
 				::SHGetSpecialFolderPathA(nullptr, pf, CSIDL_PROGRAM_FILES, false);
 				dylib = ::LoadLibraryA(std::format("{}/RenderDoc/renderdoc.dll", pf).c_str());
 			}
+#endif
 			if (!dylib) return;
 			
 			pRENDERDOC_GetAPI RenderdocGetApi = (pRENDERDOC_GetAPI)::GetProcAddress(dylib, "RENDERDOC_GetAPI");
@@ -39,7 +41,9 @@ namespace hyperbeetle {
 #else
 			void* dylib = nullptr;
 			if (!dylib) dylib = ::dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD);
+#if defined(HE_DEBUG) || defined(HE_RELEASE)
 			if (!dylib) dylib = ::dlopen("librenderdoc.so", RTLD_NOW);
+#endif
 			if (!dylib) return;
 
 			pRENDERDOC_GetAPI RenderdocGetApi = (pRENDERDOC_GetAPI)::dlsym(dylib, "RENDERDOC_GetAPI");

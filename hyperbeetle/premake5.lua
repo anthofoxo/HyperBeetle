@@ -3,6 +3,10 @@ project "hyperbeetle"
 debugdir "../hyperbeetle_data"
 
 kind "ConsoleApp" -- Override default
+filter {"configurations:dist", "system:windows"}
+    kind "WindowedApp" -- Win32 AND Dist use winmain
+    defines "HE_ENTRY_WINMAIN"
+filter{}
 
 defines "TRACY_ENABLE" -- Move to AppDefines
 

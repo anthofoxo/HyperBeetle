@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <tracy/Tracy.hpp>
 
 namespace hyperbeetle {
 
@@ -33,6 +34,8 @@ namespace hyperbeetle {
 			mState->Init();
 		}
 
+		inline void Clear() { mState.reset(); }
+
 		State* Get() { return mState.get(); }
 
 		void SetUserPtr(void* ptr) { mUserPtr = ptr; }
@@ -48,6 +51,7 @@ namespace hyperbeetle {
 	
 
 	inline void StateManager::Update() {
+		ZoneScoped;
 		if (mState) mState->Update();
 	}
 

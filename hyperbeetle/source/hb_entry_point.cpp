@@ -721,6 +721,10 @@ public:
 	}
 
 	void Destroy() {
+		ZoneScoped;
+
+		mStateManager.Clear();
+
 		nvgDeleteGL3(vg);
 
 		ImGui_ImplOpenGL3_Shutdown();
@@ -1608,7 +1612,14 @@ void AppMain() {
 	spdlog::shutdown();
 }
 
-int main(int, char**) {
+int main(int argc, char* argv[]) {
 	AppMain();
 	return 0;
 }
+
+#ifdef HE_ENTRY_WINMAIN
+#include <Windows.h>
+int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
+	return main(__argc, __argv);
+}
+#endif

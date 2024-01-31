@@ -1,7 +1,4 @@
 OutputDir = "%{cfg.system}-%{cfg.architecture}/%{cfg.buildcfg}"
-AppLinks = {}
-AppIncludes = {}
-AppDefines = {}
 
 workspace "hyperbeetle"
     architecture "x86_64"
@@ -26,34 +23,31 @@ workspace "hyperbeetle"
     filter "configurations:debug"
         runtime "Debug"
         optimize "Debug"
+        defines "HE_DEBUG"
 
     filter "configurations:release"
         runtime "Release"
         optimize "Speed"
+        defines "HE_RELEASE"
 
     filter "configurations:dist"
         runtime "Release"
         optimize "Speed"
         vectorextensions "AVX2"
         flags { "LinkTimeOptimization", "NoBufferSecurityCheck" }
+        defines "HE_DIST"
 
     filter "system:windows"
         systemversion "latest"
         defines { "WIN32_LEAN_AND_MEAN", "NOMINMAX" }
-        buildoptions { "/EHsc", "/Zc:preprocessor", "/Zc:__cplusplus" }
+        buildoptions { "/EHsc", "/Zc:preprocessor", "/Zc:__cplusplus" }    
 
     filter {}
 
 group "dependencies"
-    include "premake/glfw.lua"
-    include "premake/glad.lua"
-    include "premake/lua.lua"
-    include "premake/imgui.lua"
-    include "premake/tracy.lua"
-    include "premake/imguizmo.lua"
-    include "premake/boost_regex.lua"
-    include "premake/assimp.lua"
-    include "premake/nanovg.lua"
+for _, matchedfile in ipairs(os.matchfiles("premake/*.lua")) do
+    include(matchedfile)
+end
 group ""
 
 include "hyperbeetle/premake5.lua"
