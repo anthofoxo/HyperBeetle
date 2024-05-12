@@ -1,0 +1,9 @@
+/bin/
+/bin_obj/
+/build/
+/.vs/
+*.sln
+Makefile
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
