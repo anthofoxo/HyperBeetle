@@ -20,6 +20,9 @@ namespace hyperbeetle {
 		Window& operator=(Window&& other) noexcept;
 		~Window() noexcept;
 
+		void swapBuffers() const;
+		void makeContextCurrent() const;
+
 		inline GLFWwindow* handle() const { return mHandle; }
 	private:
 		GLFWwindow* mHandle = nullptr;

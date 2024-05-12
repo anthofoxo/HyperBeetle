@@ -3,20 +3,37 @@
 #include <atomic>
 #include <thread>
 
+#include <glad/gl.h>
+
+// Avoid including entirty of the glfw headers
 extern "C" int glfwWindowShouldClose(GLFWwindow* window);
 extern "C" void glfwWaitEvents(void);
 extern "C" void glfwPostEmptyEvent(void);
+extern "C" typedef void (*hbglproc)(void);
+extern "C" hbglproc glfwGetProcAddress(const char* procname);
 
 static std::atomic_bool kRunning = true;
 
-#define HB_VERSION "v0.0.1-a.1+" __DATE__ " " __TIME__
+#define HB_VERSION "v0.0.1-a.2+" __DATE__ " " __TIME__
 
 int main(int argc, char* argv[]) {
 	hyperbeetle::Window window({ .width = 1280, .height = 720, .title = "HyperBeetle " HB_VERSION });
 
-	std::jthread thread = std::jthread([]() {
+	std::jthread thread = std::jthread([&]() {
+		window.makeContextCurrent();
+
+		if (!gladLoadGL(&glfwGetProcAddress))
+			kRunning = false;
+
+		glClearColor(0, 0, 0, 0);
+
 		while (kRunning) {
+			glClear(GL_COLOR_BUFFER_BIT);
+			window.swapBuffers();
 		}
+
+		hyperbeetle::Window().makeContextCurrent();
+
 		glfwPostEmptyEvent();
 	});
 

@@ -49,7 +49,7 @@ includedirs
 
 links
 {
-    "glfw" --, "glad",
+    "glfw", "glad",
     --"nanovg",
     --"lua", "yaml",
     --"tracy"
