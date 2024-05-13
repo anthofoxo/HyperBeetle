@@ -4,6 +4,7 @@
 #include <thread>
 #include <string_view>
 #include <iostream>
+#include <sstream>
 
 #include <glad/gl.h>
 
@@ -14,7 +15,14 @@ extern "C" void glfwPostEmptyEvent(void);
 extern "C" typedef void (*hbglproc)(void);
 extern "C" hbglproc glfwGetProcAddress(const char* procname);
 
+#include <GLFW/glfw3.h>
+
 #define HB_VERSION "v0.0.1-a.2+" __DATE__ " " __TIME__
+#define HB_VERSION_FULL "HyperBeetle " HB_VERSION
+
+#define NANOVG_GL3_IMPLEMENTATION
+#include <nanovg.h>
+#include <nanovg_gl.h>
 
 namespace {
 	std::atomic_bool kRunning = true;
@@ -49,11 +57,41 @@ namespace {
 	}
 }
 
-int main(int argc, char* argv[]) {
-	hyperbeetle::Window window({ .width = 1280, .height = 720, .title = "HyperBeetle " HB_VERSION });
+struct Application final {
+	void runMainThread() {
+		mWindow = hyperbeetle::Window({ .width = 1280, .height = 720, .title = "HyperBeetle"});
 
-	std::jthread thread = std::jthread([&]() {
-		window.makeContextCurrent();
+		glfwSetWindowUserPointer(mWindow.handle(), this);
+
+		glfwGetWindowContentScale(mWindow.handle(), &contentScaleX, &contentScaleY);
+		glfwGetFramebufferSize(mWindow.handle(), &framebufferWidth, &framebufferHeight);
+
+		glfwSetFramebufferSizeCallback(mWindow.handle(), [](GLFWwindow* window, int width, int height) {
+			auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
+			application.framebufferWidth = width;
+			application.framebufferHeight = height;
+		});
+
+		glfwSetWindowContentScaleCallback(mWindow.handle(), [](GLFWwindow* window, float xscale, float yscale) {
+			auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
+			application.contentScaleX = xscale;
+			application.contentScaleY = yscale;
+		});
+
+		std::jthread thread = std::jthread(&Application::runRenderThread, this);
+
+		while (kRunning) {
+			glfwWaitEvents();
+
+			if (glfwWindowShouldClose(mWindow.handle()))
+				kRunning = false;
+		}
+
+		thread.join();
+	}
+
+	void runRenderThread() {
+		mWindow.makeContextCurrent();
 
 		if (!gladLoadGL(&glfwGetProcAddress))
 			kRunning = false;
@@ -65,26 +103,64 @@ int main(int argc, char* argv[]) {
 			glDebugMessageCallback(&message_callback, nullptr);
 		}
 
+		mVg = nvgCreateGL3(NVG_STENCIL_STROKES | NVG_ANTIALIAS);
+
+		int id = nvgCreateFont(mVg, "notosans-regular", "NotoSans-Regular.ttf");
+		if (id != -1)
+			nvgFontFaceId(mVg, id);
+
 		glClearColor(0, 0, 0, 0);
 
+		double lastTime = glfwGetTime();
+		double currentTime;
+		double deltaTime;
+
 		while (kRunning) {
-			glClear(GL_COLOR_BUFFER_BIT);
-			window.swapBuffers();
+			currentTime = glfwGetTime();
+			deltaTime = currentTime - lastTime;
+			lastTime = currentTime;
+
+			glViewport(0, 0, framebufferWidth, framebufferHeight);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+			std::stringstream stream;
+			stream << HB_VERSION_FULL << '\n';
+			stream << deltaTime << '\n';
+			stream << static_cast<int>(1.0 / deltaTime) << '\n';
+			stream << framebufferWidth << 'x' << framebufferHeight << '\n';
+			stream << contentScaleX << 'x' << contentScaleY;
+
+			std::string str = stream.str();
+
+			float width = static_cast<float>(framebufferWidth) / contentScaleX;
+			float height = static_cast<float>(framebufferHeight) / contentScaleY;
+			nvgBeginFrame(mVg, width, height, fmaxf(contentScaleX, contentScaleY));
+
+			nvgTextAlign(mVg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+			nvgTextBox(mVg, 8, 8, width - 16, str.c_str(), nullptr);
+
+			nvgEndFrame(mVg);
+
+			mWindow.swapBuffers();
 		}
+
+		nvgDeleteGL3(mVg);
 
 		hyperbeetle::Window().makeContextCurrent();
 
 		glfwPostEmptyEvent();
-	});
-
-	while (kRunning) {
-		glfwWaitEvents();
-		
-		if (glfwWindowShouldClose(window.handle()))
-			kRunning = false;
 	}
 
-	thread.join();
+	int framebufferWidth, framebufferHeight;
+	float contentScaleX, contentScaleY;
+
+	hyperbeetle::Window mWindow;
+	NVGcontext* mVg = nullptr;
+};
+
+int main(int argc, char* argv[]) {
+	Application application;
+	application.runMainThread();
 }
 
 #ifdef HB_ENTRY_WINMAIN

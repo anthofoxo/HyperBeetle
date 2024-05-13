@@ -50,7 +50,7 @@ includedirs
 links
 {
     "glfw", "glad",
-    --"nanovg",
+    "nanovg",
     --"lua", "yaml",
     --"tracy"
 }
