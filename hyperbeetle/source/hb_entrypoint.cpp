@@ -17,7 +17,7 @@ extern "C" hbglproc glfwGetProcAddress(const char* procname);
 
 #include <GLFW/glfw3.h>
 
-#define HB_VERSION "v0.0.1-a.2+" __DATE__ " " __TIME__
+#define HB_VERSION "v0.0.1-a.3+" __DATE__ " " __TIME__
 #define HB_VERSION_FULL "HyperBeetle " HB_VERSION
 
 #define NANOVG_GL3_IMPLEMENTATION
