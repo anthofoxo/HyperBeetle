@@ -8,12 +8,10 @@
 
 #include <glad/gl.h>
 
-// Avoid including entirty of the glfw headers
-extern "C" int glfwWindowShouldClose(GLFWwindow* window);
-extern "C" void glfwWaitEvents(void);
-extern "C" void glfwPostEmptyEvent(void);
-extern "C" typedef void (*hbglproc)(void);
-extern "C" hbglproc glfwGetProcAddress(const char* procname);
+#define STB_VORBIS_HEADER_ONLY
+#include <stb_vorbis.c>
+#define MINIAUDIO_IMPLEMENTATION
+#include <miniaudio.h>
 
 #include <GLFW/glfw3.h>
 
@@ -57,14 +55,81 @@ namespace {
 	}
 }
 
+struct AudioEngine final {
+	void init() {
+		if (ma_context_init(nullptr, 0, nullptr, &mContext) != MA_SUCCESS) {
+			// Error.
+		}
+
+		ma_device_info* pPlaybackInfos;
+		ma_uint32 playbackCount;
+		if (ma_context_get_devices(&mContext, &pPlaybackInfos, &playbackCount, nullptr, nullptr) != MA_SUCCESS) {
+			// Error.
+		}
+
+		ma_uint32 chosenPlaybackDeviceIndex = 0;
+
+		for (ma_uint32 iDevice = 0; iDevice < playbackCount; iDevice += 1) {
+			printf("%d - %s", iDevice, pPlaybackInfos[iDevice].name);
+
+			if (pPlaybackInfos[iDevice].isDefault) {
+				chosenPlaybackDeviceIndex = iDevice;
+				printf("%s", "*");
+			}
+
+			printf("\n");
+		}
+
+		mDeviceName = pPlaybackInfos[chosenPlaybackDeviceIndex].name;
+
+		ma_device_config deviceConfig = ma_device_config_init(ma_device_type_playback);
+		deviceConfig.playback.pDeviceID = &pPlaybackInfos[chosenPlaybackDeviceIndex].id;
+		deviceConfig.pUserData = &mEngine;
+
+		deviceConfig.dataCallback = [](ma_device* pDevice, void* pOutput, void const* pInput, ma_uint32 frameCount) {
+			ma_engine_read_pcm_frames(static_cast<ma_engine*>(pDevice->pUserData), pOutput, frameCount, nullptr);
+		};
+
+		if (ma_device_init(&mContext, &deviceConfig, &mDevice) != MA_SUCCESS) {
+			// Error.
+		}
+
+		ma_engine_config engineConfig = ma_engine_config_init();
+		engineConfig.pDevice = &mDevice;
+
+		if (ma_engine_init(&engineConfig, &mEngine) != MA_SUCCESS) {
+			// Error.
+		}
+	}
+
+	void uninit() {
+		ma_engine_uninit(&mEngine);
+		ma_device_uninit(&mDevice);
+		ma_context_uninit(&mContext);
+	}
+
+	std::string mDeviceName;
+	ma_context mContext;
+	ma_device mDevice;
+	ma_engine mEngine;
+};
+
 struct Application final {
 	void runMainThread() {
-		mWindow = hyperbeetle::Window({ .width = 1280, .height = 720, .title = "HyperBeetle"});
+		mWindow = hyperbeetle::Window({ .width = 1280, .height = 720, .title = "HyperBeetle" });
+
+		mAudioEngine.init();
 
 		glfwSetWindowUserPointer(mWindow.handle(), this);
 
 		glfwGetWindowContentScale(mWindow.handle(), &contentScaleX, &contentScaleY);
 		glfwGetFramebufferSize(mWindow.handle(), &framebufferWidth, &framebufferHeight);
+
+		glfwSetKeyCallback(mWindow.handle(), [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+			auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
+			if (action == GLFW_PRESS && key == GLFW_KEY_SPACE)
+				ma_engine_play_sound(&application.mAudioEngine.mEngine, "select1.ogg", nullptr);
+		});
 
 		glfwSetFramebufferSizeCallback(mWindow.handle(), [](GLFWwindow* window, int width, int height) {
 			auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
@@ -88,6 +153,8 @@ struct Application final {
 		}
 
 		thread.join();
+
+		mAudioEngine.uninit();
 	}
 
 	void runRenderThread() {
@@ -109,6 +176,9 @@ struct Application final {
 		if (id != -1)
 			nvgFontFaceId(mVg, id);
 
+		unsigned int vao;
+
+
 		glClearColor(0, 0, 0, 0);
 
 		double lastTime = glfwGetTime();
@@ -128,7 +198,8 @@ struct Application final {
 			stream << deltaTime << '\n';
 			stream << static_cast<int>(1.0 / deltaTime) << '\n';
 			stream << framebufferWidth << 'x' << framebufferHeight << '\n';
-			stream << contentScaleX << 'x' << contentScaleY;
+			stream << contentScaleX << 'x' << contentScaleY << '\n';
+			stream << mAudioEngine.mDeviceName;
 
 			std::string str = stream.str();
 
@@ -155,6 +226,7 @@ struct Application final {
 	float contentScaleX, contentScaleY;
 
 	hyperbeetle::Window mWindow;
+	AudioEngine mAudioEngine;
 	NVGcontext* mVg = nullptr;
 };
 
