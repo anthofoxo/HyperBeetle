@@ -5,6 +5,11 @@
 #include <string_view>
 #include <iostream>
 #include <sstream>
+#include <array>
+#include <algorithm>
+#include <cmath>
+#include <vector>
+#include <string>
 
 #include <glad/gl.h>
 
@@ -56,7 +61,7 @@ namespace {
 }
 
 struct AudioEngine final {
-	void init() {
+	void init(std::string_view preferredDevice) {
 		if (ma_context_init(nullptr, 0, nullptr, &mContext) != MA_SUCCESS) {
 			// Error.
 		}
@@ -67,17 +72,24 @@ struct AudioEngine final {
 			// Error.
 		}
 
+		bool isDeviceChosen = false;
 		ma_uint32 chosenPlaybackDeviceIndex = 0;
 
 		for (ma_uint32 iDevice = 0; iDevice < playbackCount; iDevice += 1) {
-			printf("%d - %s", iDevice, pPlaybackInfos[iDevice].name);
-
-			if (pPlaybackInfos[iDevice].isDefault) {
+			if (std::string_view(pPlaybackInfos[iDevice].name) == preferredDevice) {
 				chosenPlaybackDeviceIndex = iDevice;
-				printf("%s", "*");
+				isDeviceChosen = true;
 			}
+		}
 
-			printf("\n");
+		if (!isDeviceChosen) {
+			for (ma_uint32 iDevice = 0; iDevice < playbackCount; iDevice += 1) {
+				if (pPlaybackInfos[iDevice].isDefault) {
+					chosenPlaybackDeviceIndex = iDevice;
+					isDeviceChosen = true;
+					break;
+				}
+			}
 		}
 
 		mDeviceName = pPlaybackInfos[chosenPlaybackDeviceIndex].name;
@@ -118,7 +130,7 @@ struct Application final {
 	void runMainThread() {
 		mWindow = hyperbeetle::Window({ .width = 1280, .height = 720, .title = "HyperBeetle" });
 
-		mAudioEngine.init();
+		mAudioEngine.init("");
 
 		glfwSetWindowUserPointer(mWindow.handle(), this);
 
@@ -127,8 +139,11 @@ struct Application final {
 
 		glfwSetKeyCallback(mWindow.handle(), [](GLFWwindow* window, int key, int scancode, int action, int mods) {
 			auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
-			if (action == GLFW_PRESS && key == GLFW_KEY_SPACE)
-				ma_engine_play_sound(&application.mAudioEngine.mEngine, "select1.ogg", nullptr);
+
+			if (action == GLFW_PRESS && key == GLFW_KEY_ENTER) application.performAction = true;
+
+			if (action == GLFW_PRESS && key == GLFW_KEY_DOWN) ++application.selectedOption;
+			else if (action == GLFW_PRESS && key == GLFW_KEY_UP) --application.selectedOption;
 		});
 
 		glfwSetFramebufferSizeCallback(mWindow.handle(), [](GLFWwindow* window, int width, int height) {
@@ -177,7 +192,7 @@ struct Application final {
 			nvgFontFaceId(mVg, id);
 
 		unsigned int vao;
-
+		glGenVertexArrays(1, &vao);
 
 		glClearColor(0, 0, 0, 0);
 
@@ -210,10 +225,105 @@ struct Application final {
 			nvgTextAlign(mVg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
 			nvgTextBox(mVg, 8, 8, width - 16, str.c_str(), nullptr);
 
+			
+			nvgTextAlign(mVg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+
+			static int menuId = 0;
+
+			if (menuId == 0) {
+				std::array<char const*, 2> texts = { "Options", "Quit" };
+				nvgFontSize(mVg, std::min(height / texts.size() / 2, 64.0f));
+
+				if (selectedOption < 0) selectedOption = 0;
+				if (selectedOption >= texts.size()) selectedOption = texts.size() - 1;
+
+				for (int i = 0; i < texts.size(); ++i) {
+
+					if (i == selectedOption) {
+						nvgFillColor(mVg, nvgRGBf(1, 0, 0));
+					}
+					else {
+						nvgFillColor(mVg, nvgRGBf(1, 1, 1));
+					}
+
+					nvgText(mVg, width / 2, height / (texts.size() + 1) * (i + 1), texts[i], nullptr);
+				}
+
+				if (performAction) {
+					if (selectedOption == 0) {
+						menuId = 1;
+						selectedOption = 0;
+					}
+					else if (selectedOption == 1) {
+						kRunning = false;
+					}
+
+					ma_engine_play_sound(&mAudioEngine.mEngine, "select1.ogg", nullptr);
+					performAction = false;
+				}
+			} else if (menuId == 1) {
+
+				std::vector<std::string> texts;
+				int currentDeviceIdx = 0;
+
+				{
+					ma_device_info* pPlaybackInfos;
+					ma_uint32 playbackCount;
+					if (ma_context_get_devices(&mAudioEngine.mContext, &pPlaybackInfos, &playbackCount, nullptr, nullptr) != MA_SUCCESS) {
+						// Error.
+					}
+
+					for (ma_uint32 iDevice = 0; iDevice < playbackCount; iDevice += 1) {
+
+						texts.push_back(pPlaybackInfos[iDevice].name);
+
+						if (pPlaybackInfos[iDevice].isDefault)
+							currentDeviceIdx = iDevice;
+					}
+				}
+
+				texts.push_back("Back");
+
+				nvgFontSize(mVg, std::min(height / texts.size() / 2, 64.0f));
+
+				if (selectedOption < 0) selectedOption = 0;
+				if (selectedOption >= texts.size()) selectedOption = texts.size() - 1;
+
+				for (int i = 0; i < texts.size(); ++i) {
+
+					if (i == selectedOption) {
+						nvgFillColor(mVg, nvgRGBf(1, 0, 0));
+					}
+					else {
+						nvgFillColor(mVg, nvgRGBf(1, 1, 1));
+					}
+
+					nvgText(mVg, width / 2, height / (texts.size() + 1) * (i + 1), texts[i].c_str(), nullptr);
+				}
+
+				if (performAction) {
+					if (selectedOption == texts.size() - 1) {
+						performAction = false;
+						selectedOption = 0;
+						menuId = 0;
+					}
+					else {
+						mAudioEngine.uninit();
+						mAudioEngine.init(texts[selectedOption]);
+					}
+
+
+					ma_engine_play_sound(&mAudioEngine.mEngine, "select1.ogg", nullptr);
+					performAction = false;
+				}
+			}
+
 			nvgEndFrame(mVg);
 
 			mWindow.swapBuffers();
 		}
+
+		glDeleteVertexArrays(1, &vao);
 
 		nvgDeleteGL3(mVg);
 
@@ -221,6 +331,9 @@ struct Application final {
 
 		glfwPostEmptyEvent();
 	}
+
+	bool performAction = false;
+	int selectedOption = 0;
 
 	int framebufferWidth, framebufferHeight;
 	float contentScaleX, contentScaleY;
