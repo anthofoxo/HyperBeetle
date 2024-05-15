@@ -4,3 +4,6 @@
 [submodule "vendor/nanovg"]
 	path = vendor/nanovg
 	url = https://github.com/memononen/nanovg
+[submodule "vendor/yaml"]
+	path = vendor/yaml
+	url = https://github.com/jbeder/yaml-cpp

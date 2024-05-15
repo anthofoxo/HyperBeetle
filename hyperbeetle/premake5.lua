@@ -51,7 +51,8 @@ links
 {
     "glfw", "glad",
     "nanovg",
-    --"lua", "yaml",
+    "yaml",
+    --"lua", 
     --"tracy"
 }
 

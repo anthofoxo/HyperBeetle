@@ -9,7 +9,10 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <fstream>
 #include <string>
+
+#include <yaml-cpp/yaml.h>
 
 #include <glad/gl.h>
 
@@ -61,6 +64,7 @@ namespace {
 }
 
 struct AudioEngine final {
+
 	void init(std::string_view preferredDevice) {
 		if (ma_context_init(nullptr, 0, nullptr, &mContext) != MA_SUCCESS) {
 			// Error.
@@ -128,9 +132,23 @@ struct AudioEngine final {
 
 struct Application final {
 	void runMainThread() {
+		// #include "Windows.h"
+		// GetModuleHandleA("C:/Program Files/RenderDoc/renderdoc.dll");
+		// HMODULE module = LoadLibraryA("C:/Program Files/RenderDoc/renderdoc.dll");
+		// GetProcAddress(module, "myPuts");
+		// FreeLibrary(module);
+
+		// Read config
+		std::string configuredAudioDevice = "";
+		try {
+			YAML::Node config = YAML::LoadFile("config.yaml");
+			configuredAudioDevice = config["audioDevice"].as<std::string>("");
+		}
+		catch (YAML::BadFile const& e) {}
+
 		mWindow = hyperbeetle::Window({ .width = 1280, .height = 720, .title = "HyperBeetle" });
 
-		mAudioEngine.init("");
+		mAudioEngine.init(configuredAudioDevice);
 
 		glfwSetWindowUserPointer(mWindow.handle(), this);
 
@@ -142,8 +160,14 @@ struct Application final {
 
 			if (action == GLFW_PRESS && key == GLFW_KEY_ENTER) application.performAction = true;
 
-			if (action == GLFW_PRESS && key == GLFW_KEY_DOWN) ++application.selectedOption;
-			else if (action == GLFW_PRESS && key == GLFW_KEY_UP) --application.selectedOption;
+			if (action == GLFW_PRESS && key == GLFW_KEY_DOWN) {
+				++application.selectedOption;
+				ma_engine_play_sound(&application.mAudioEngine.mEngine, "cursor1.ogg", nullptr);
+			}
+			else if (action == GLFW_PRESS && key == GLFW_KEY_UP) {
+				--application.selectedOption;
+				ma_engine_play_sound(&application.mAudioEngine.mEngine, "cursor1.ogg", nullptr);
+			}
 		});
 
 		glfwSetFramebufferSizeCallback(mWindow.handle(), [](GLFWwindow* window, int width, int height) {
@@ -310,6 +334,22 @@ struct Application final {
 					else {
 						mAudioEngine.uninit();
 						mAudioEngine.init(texts[selectedOption]);
+
+						// Save choice
+
+						YAML::Node config = YAML::Node();
+
+						try {
+							config = YAML::LoadFile("config.yaml");
+						}
+						catch (YAML::BadFile const& e) {}
+
+						config["audioDevice"] = texts[selectedOption];
+
+						std::ofstream myfile;
+						myfile.open("config.yaml", std::ios::binary | std::ios::out);
+						myfile << config;
+						myfile.close();
 					}
 
 
