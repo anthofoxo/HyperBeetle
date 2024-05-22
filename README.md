@@ -11,3 +11,4 @@ HyperBeetle uses [premake5](https://premake.github.io/download) as the build sys
 - [stb_vorbis v1.22](https://github.com/nothings/stb/tree/ae721c50eaf761660b4f90cc590453cdb0c2acd0)
 - [miniaudio 0.11.21](https://github.com/mackron/miniaudio/tree/0.11.21)
 - [Yaml-cpp 0.8.0](https://github.com/jbeder/yaml-cpp/tree/0.8.0)
+- [EnTT v3.13.2](https://github.com/skypjack/entt/tree/v3.13.2)

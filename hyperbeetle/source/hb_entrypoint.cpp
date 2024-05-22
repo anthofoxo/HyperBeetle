@@ -6,13 +6,17 @@
 #include <iostream>
 #include <sstream>
 #include <array>
+#include <vector>
 #include <algorithm>
 #include <cmath>
 #include <vector>
 #include <fstream>
+#include <mutex>
 #include <string>
 
 #include <yaml-cpp/yaml.h>
+
+#include <entt/entt.hpp>
 
 #include <glad/gl.h>
 
@@ -23,7 +27,7 @@
 
 #include <GLFW/glfw3.h>
 
-#define HB_VERSION "v0.0.1-a.3+" __DATE__ " " __TIME__
+#define HB_VERSION "v0.0.1-a.4+" __DATE__ " " __TIME__
 #define HB_VERSION_FULL "HyperBeetle " HB_VERSION
 
 #define NANOVG_GL3_IMPLEMENTATION
@@ -130,261 +134,380 @@ struct AudioEngine final {
 	ma_engine mEngine;
 };
 
+struct EventKey final {
+	GLFWwindow* window;
+	int key, scancode, action, mods;
+};
+
+#include <renderdoc_app.h>
+
+static RENDERDOC_API_1_0_0* kRdocApi = nullptr;
+
+#ifdef _WIN32
+#	include <Windows.h>
+
+void setupRenderdoc() {
+
+	HMODULE module = GetModuleHandleA("renderdoc");
+	bool manuallyAttached = module != nullptr;
+#ifndef HB_DIST
+	if (module == nullptr) module = LoadLibraryA("C:/Program Files/RenderDoc/renderdoc.dll");
+#endif
+	if (module == nullptr) return;
+	
+	pRENDERDOC_GetAPI getApi = reinterpret_cast<pRENDERDOC_GetAPI>(GetProcAddress(module, "RENDERDOC_GetAPI"));
+	if (getApi == nullptr) return;
+
+	int ret = getApi(eRENDERDOC_API_Version_1_0_0, reinterpret_cast<void**>(&kRdocApi));
+	if (!ret) return;
+	if (!kRdocApi) return;
+
+	kRdocApi->MaskOverlayBits(eRENDERDOC_Overlay_None, eRENDERDOC_Overlay_None);
+	kRdocApi->SetCaptureOptionU32(eRENDERDOC_Option_DebugOutputMute, false);
+	kRdocApi->SetCaptureOptionU32(eRENDERDOC_Option_APIValidation, true);
+	kRdocApi->SetCaptureOptionU32(eRENDERDOC_Option_CaptureCallstacks, true);
+	kRdocApi->SetCaptureOptionU32(eRENDERDOC_Option_VerifyBufferAccess, true);
+	kRdocApi->SetCaptureOptionU32(eRENDERDOC_Option_RefAllResources, true);
+
+	int major, minor, patch;
+	kRdocApi->GetAPIVersion(&major, &minor, &patch);
+	std::cout << "Requested 1.0.0, Got " << major << "." << minor << "." << patch << "\n";
+
+	if (!manuallyAttached) {
+		RENDERDOC_InputButton keys[] = { eRENDERDOC_Key_F10 };
+		kRdocApi->SetCaptureKeys(keys, 1);
+	}
+}
+#else
+void setupRenderdoc() {}
+#endif
+
+#if 0
+struct StateManager;
+
+struct State {
+	State() = default;
+	virtual ~State() = default;
+	State(State const&) = delete;
+	State& operator=(State const&) = delete;
+	State(State&&) = delete;
+	State& operator=(State&&) = delete;
+
+	virtual void update() = 0;
+};
+
+struct StateManager final {
+	std::vector<std::unique_ptr<State>> mStates;
+
+	template<class T, class... Args, std::enable_if_t<std::is_base_of_v<State, T>, bool> = true>
+	void push(Args&&... args) {
+		mStates.push_back(std::make_unique<T>(std::forward<Args>(args)...));
+	}
+
+	void update() {
+		for (auto& state : mStates)
+			state->update();
+	}
+};
+#endif
+
+struct MenuState final {
+	void init();
+	void update();
+	void destroy();
+
+	void onKey(EventKey const& e);
+
+	bool mPerformAction = false;
+	int mSelectedOption = 0;
+};
+
 struct Application final {
-	void runMainThread() {
-		// #include "Windows.h"
-		// GetModuleHandleA("C:/Program Files/RenderDoc/renderdoc.dll");
-		// HMODULE module = LoadLibraryA("C:/Program Files/RenderDoc/renderdoc.dll");
-		// GetProcAddress(module, "myPuts");
-		// FreeLibrary(module);
+	void runMainThread();
+	void runRenderThread();
 
-		// Read config
-		std::string configuredAudioDevice = "";
-		try {
-			YAML::Node config = YAML::LoadFile("config.yaml");
-			configuredAudioDevice = config["audioDevice"].as<std::string>("");
-		}
-		catch (YAML::BadFile const& e) {}
+	int mFramebufferWidth, mFramebufferHeight;
+	float mContentScaleX, mContentScaleY;
 
-		mWindow = hyperbeetle::Window({ .width = 1280, .height = 720, .title = "HyperBeetle" });
+	float mUiWidth, mUiHeight;
 
-		mAudioEngine.init(configuredAudioDevice);
-
-		glfwSetWindowUserPointer(mWindow.handle(), this);
-
-		glfwGetWindowContentScale(mWindow.handle(), &contentScaleX, &contentScaleY);
-		glfwGetFramebufferSize(mWindow.handle(), &framebufferWidth, &framebufferHeight);
-
-		glfwSetKeyCallback(mWindow.handle(), [](GLFWwindow* window, int key, int scancode, int action, int mods) {
-			auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
-
-			if (action == GLFW_PRESS && key == GLFW_KEY_ENTER) application.performAction = true;
-
-			if (action == GLFW_PRESS && key == GLFW_KEY_DOWN) {
-				++application.selectedOption;
-				ma_engine_play_sound(&application.mAudioEngine.mEngine, "cursor1.ogg", nullptr);
-			}
-			else if (action == GLFW_PRESS && key == GLFW_KEY_UP) {
-				--application.selectedOption;
-				ma_engine_play_sound(&application.mAudioEngine.mEngine, "cursor1.ogg", nullptr);
-			}
-		});
-
-		glfwSetFramebufferSizeCallback(mWindow.handle(), [](GLFWwindow* window, int width, int height) {
-			auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
-			application.framebufferWidth = width;
-			application.framebufferHeight = height;
-		});
-
-		glfwSetWindowContentScaleCallback(mWindow.handle(), [](GLFWwindow* window, float xscale, float yscale) {
-			auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
-			application.contentScaleX = xscale;
-			application.contentScaleY = yscale;
-		});
-
-		std::jthread thread = std::jthread(&Application::runRenderThread, this);
-
-		while (kRunning) {
-			glfwWaitEvents();
-
-			if (glfwWindowShouldClose(mWindow.handle()))
-				kRunning = false;
-		}
-
-		thread.join();
-
-		mAudioEngine.uninit();
-	}
-
-	void runRenderThread() {
-		mWindow.makeContextCurrent();
-
-		if (!gladLoadGL(&glfwGetProcAddress))
-			kRunning = false;
-
-		if (GLAD_GL_KHR_debug) {
-			glEnable(GL_DEBUG_OUTPUT);
-			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-			glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
-			glDebugMessageCallback(&message_callback, nullptr);
-		}
-
-		mVg = nvgCreateGL3(NVG_STENCIL_STROKES | NVG_ANTIALIAS);
-
-		int id = nvgCreateFont(mVg, "notosans-regular", "NotoSans-Regular.ttf");
-		if (id != -1)
-			nvgFontFaceId(mVg, id);
-
-		unsigned int vao;
-		glGenVertexArrays(1, &vao);
-
-		glClearColor(0, 0, 0, 0);
-
-		double lastTime = glfwGetTime();
-		double currentTime;
-		double deltaTime;
-
-		while (kRunning) {
-			currentTime = glfwGetTime();
-			deltaTime = currentTime - lastTime;
-			lastTime = currentTime;
-
-			glViewport(0, 0, framebufferWidth, framebufferHeight);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-			std::stringstream stream;
-			stream << HB_VERSION_FULL << '\n';
-			stream << deltaTime << '\n';
-			stream << static_cast<int>(1.0 / deltaTime) << '\n';
-			stream << framebufferWidth << 'x' << framebufferHeight << '\n';
-			stream << contentScaleX << 'x' << contentScaleY << '\n';
-			stream << mAudioEngine.mDeviceName;
-
-			std::string str = stream.str();
-
-			float width = static_cast<float>(framebufferWidth) / contentScaleX;
-			float height = static_cast<float>(framebufferHeight) / contentScaleY;
-			nvgBeginFrame(mVg, width, height, fmaxf(contentScaleX, contentScaleY));
-
-			nvgTextAlign(mVg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-			nvgTextBox(mVg, 8, 8, width - 16, str.c_str(), nullptr);
-
-			
-			nvgTextAlign(mVg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-
-			static int menuId = 0;
-
-			if (menuId == 0) {
-				std::array<char const*, 2> texts = { "Options", "Quit" };
-				nvgFontSize(mVg, std::min(height / texts.size() / 2, 64.0f));
-
-				if (selectedOption < 0) selectedOption = 0;
-				if (selectedOption >= texts.size()) selectedOption = texts.size() - 1;
-
-				for (int i = 0; i < texts.size(); ++i) {
-
-					if (i == selectedOption) {
-						nvgFillColor(mVg, nvgRGBf(1, 0, 0));
-					}
-					else {
-						nvgFillColor(mVg, nvgRGBf(1, 1, 1));
-					}
-
-					nvgText(mVg, width / 2, height / (texts.size() + 1) * (i + 1), texts[i], nullptr);
-				}
-
-				if (performAction) {
-					if (selectedOption == 0) {
-						menuId = 1;
-						selectedOption = 0;
-					}
-					else if (selectedOption == 1) {
-						kRunning = false;
-					}
-
-					ma_engine_play_sound(&mAudioEngine.mEngine, "select1.ogg", nullptr);
-					performAction = false;
-				}
-			} else if (menuId == 1) {
-
-				std::vector<std::string> texts;
-				int currentDeviceIdx = 0;
-
-				{
-					ma_device_info* pPlaybackInfos;
-					ma_uint32 playbackCount;
-					if (ma_context_get_devices(&mAudioEngine.mContext, &pPlaybackInfos, &playbackCount, nullptr, nullptr) != MA_SUCCESS) {
-						// Error.
-					}
-
-					for (ma_uint32 iDevice = 0; iDevice < playbackCount; iDevice += 1) {
-
-						texts.push_back(pPlaybackInfos[iDevice].name);
-
-						if (pPlaybackInfos[iDevice].isDefault)
-							currentDeviceIdx = iDevice;
-					}
-				}
-
-				texts.push_back("Back");
-
-				nvgFontSize(mVg, std::min(height / texts.size() / 2, 64.0f));
-
-				if (selectedOption < 0) selectedOption = 0;
-				if (selectedOption >= texts.size()) selectedOption = texts.size() - 1;
-
-				for (int i = 0; i < texts.size(); ++i) {
-
-					if (i == selectedOption) {
-						nvgFillColor(mVg, nvgRGBf(1, 0, 0));
-					}
-					else {
-						nvgFillColor(mVg, nvgRGBf(1, 1, 1));
-					}
-
-					nvgText(mVg, width / 2, height / (texts.size() + 1) * (i + 1), texts[i].c_str(), nullptr);
-				}
-
-				if (performAction) {
-					if (selectedOption == texts.size() - 1) {
-						performAction = false;
-						selectedOption = 0;
-						menuId = 0;
-					}
-					else {
-						mAudioEngine.uninit();
-						mAudioEngine.init(texts[selectedOption]);
-
-						// Save choice
-
-						YAML::Node config = YAML::Node();
-
-						try {
-							config = YAML::LoadFile("config.yaml");
-						}
-						catch (YAML::BadFile const& e) {}
-
-						config["audioDevice"] = texts[selectedOption];
-
-						std::ofstream myfile;
-						myfile.open("config.yaml", std::ios::binary | std::ios::out);
-						myfile << config;
-						myfile.close();
-					}
-
-
-					ma_engine_play_sound(&mAudioEngine.mEngine, "select1.ogg", nullptr);
-					performAction = false;
-				}
-			}
-
-			nvgEndFrame(mVg);
-
-			mWindow.swapBuffers();
-		}
-
-		glDeleteVertexArrays(1, &vao);
-
-		nvgDeleteGL3(mVg);
-
-		hyperbeetle::Window().makeContextCurrent();
-
-		glfwPostEmptyEvent();
-	}
-
-	bool performAction = false;
-	int selectedOption = 0;
-
-	int framebufferWidth, framebufferHeight;
-	float contentScaleX, contentScaleY;
+	double mDeltaTime = 1.;
 
 	hyperbeetle::Window mWindow;
 	AudioEngine mAudioEngine;
 	NVGcontext* mVg = nullptr;
+
+	std::mutex mDispatcherMtx;
+	entt::dispatcher mDispatcher{};
+
+	MenuState mState;
 };
+
+Application& getApplication();
+
+void Application::runMainThread() {
+	setupRenderdoc();
+
+	// Read config
+	std::string configuredAudioDevice = "";
+	try {
+		YAML::Node config = YAML::LoadFile("config.yaml");
+		configuredAudioDevice = config["audioDevice"].as<std::string>("");
+	}
+	catch (YAML::BadFile const& e) {}
+
+	mWindow = hyperbeetle::Window({ .width = 1280, .height = 720, .title = "HyperBeetle" });
+
+	mAudioEngine.init(configuredAudioDevice);
+
+	glfwSetWindowUserPointer(mWindow.handle(), this);
+
+	glfwGetWindowContentScale(mWindow.handle(), &mContentScaleX, &mContentScaleY);
+	glfwGetFramebufferSize(mWindow.handle(), &mFramebufferWidth, &mFramebufferHeight);
+
+	glfwSetKeyCallback(mWindow.handle(), [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+		auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
+		std::lock_guard lck{ application.mDispatcherMtx };
+		application.mDispatcher.enqueue<EventKey>(window, key, scancode, action, mods);
+	});
+
+	glfwSetFramebufferSizeCallback(mWindow.handle(), [](GLFWwindow* window, int width, int height) {
+		auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
+		application.mFramebufferWidth = width;
+		application.mFramebufferHeight = height;
+	});
+
+	glfwSetWindowContentScaleCallback(mWindow.handle(), [](GLFWwindow* window, float xscale, float yscale) {
+		auto& application = *static_cast<Application*>(glfwGetWindowUserPointer(window));
+		application.mContentScaleX = xscale;
+		application.mContentScaleY = yscale;
+	});
+
+	std::jthread thread = std::jthread(&Application::runRenderThread, this);
+
+	while (kRunning) {
+		glfwWaitEvents();
+
+		if (glfwWindowShouldClose(mWindow.handle()))
+			kRunning = false;
+	}
+
+	thread.join();
+
+	mAudioEngine.uninit();
+}
+
+void Application::runRenderThread() {
+	mWindow.makeContextCurrent();
+
+	if (!gladLoadGL(&glfwGetProcAddress))
+		kRunning = false;
+
+	if (GLAD_GL_KHR_debug) {
+		glEnable(GL_DEBUG_OUTPUT);
+#ifndef HB_DIST
+		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+#endif
+		glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+		glDebugMessageCallback(&message_callback, nullptr);
+	}
+
+	mVg = nvgCreateGL3(NVG_STENCIL_STROKES | NVG_ANTIALIAS);
+
+	int id = nvgCreateFont(mVg, "notosans-regular", "NotoSans-Regular.ttf");
+	if (id != -1)
+		nvgFontFaceId(mVg, id);
+
+	unsigned int vao;
+	glGenVertexArrays(1, &vao);
+
+	glClearColor(0, 0, 0, 0);
+
+	mState.init();
+
+	double lastTime = glfwGetTime();
+	double currentTime;
+
+	while (kRunning) {
+		{
+			std::lock_guard lck{ mDispatcherMtx };
+			mDispatcher.update();
+		}
+
+		currentTime = glfwGetTime();
+		mDeltaTime = currentTime - lastTime;
+		lastTime = currentTime;
+
+		mUiWidth = static_cast<float>(mFramebufferWidth) / mContentScaleX;
+		mUiHeight = static_cast<float>(mFramebufferHeight) / mContentScaleY;
+		nvgBeginFrame(mVg, mUiWidth, mUiHeight, fmaxf(mContentScaleX, mContentScaleY));
+
+		mState.update();
+
+		nvgEndFrame(mVg);
+		
+		mWindow.swapBuffers();
+	}
+
+	mState.destroy();
+
+	glDeleteVertexArrays(1, &vao);
+
+	nvgDeleteGL3(mVg);
+
+	hyperbeetle::Window().makeContextCurrent();
+
+	glfwPostEmptyEvent();
+}
+
+void MenuState::onKey(EventKey const& e) {
+	auto& application = getApplication();
+
+	if (e.action != GLFW_PRESS) return;
+
+	if (e.key == GLFW_KEY_ENTER)
+		mPerformAction = true;
+
+	if (e.key == GLFW_KEY_DOWN) {
+		++mSelectedOption;
+		ma_engine_play_sound(&application.mAudioEngine.mEngine, "cursor1.ogg", nullptr);
+	}
+
+	if (e.key == GLFW_KEY_UP) {
+		--mSelectedOption;
+		ma_engine_play_sound(&application.mAudioEngine.mEngine, "cursor1.ogg", nullptr);
+	}
+}
+
+void MenuState::init() {
+	auto& application = getApplication();
+	std::lock_guard lck{ application.mDispatcherMtx };
+	application.mDispatcher.sink<EventKey>().connect<&MenuState::onKey>(this);
+}
+
+void MenuState::update() {
+	auto& application = getApplication();
+
+	glViewport(0, 0, application.mFramebufferWidth, application.mFramebufferHeight);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	std::stringstream stream;
+	stream << HB_VERSION_FULL << '\n';
+	stream << application.mDeltaTime << '\n';
+	stream << static_cast<int>(1.0 / application.mDeltaTime) << '\n';
+	stream << application.mFramebufferWidth << 'x' << application.mFramebufferHeight << '\n';
+	stream << application.mContentScaleX << 'x' << application.mContentScaleY << '\n';
+	stream << application.mAudioEngine.mDeviceName;
+
+	if (kRdocApi) {
+		stream << "\nRenderdoc attached";
+	}
+
+	std::string str = stream.str();
+
+	
+
+	nvgTextAlign(application.mVg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+	nvgTextBox(application.mVg, 8, 8, application.mUiWidth - 16, str.c_str(), nullptr);
+
+
+	nvgTextAlign(application.mVg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+
+	struct MenuOption final {
+		std::string text;
+		std::function<void()> action;
+	};
+
+	static int menuId = 0;
+	std::vector<MenuOption> options;
+
+	auto populateMenuOptions = [&](std::vector<MenuOption>& options, int id) {
+		if (id == 0) {
+			options.emplace_back("Play", []() {});
+			options.emplace_back("Options", [&]() {
+				menuId = 1;
+				mSelectedOption = 0;
+				});
+			options.emplace_back("Quit", [&]() { kRunning = false; });
+		}
+
+		if (id == 1) {
+			ma_device_info* pPlaybackInfos;
+			ma_uint32 playbackCount;
+			if (ma_context_get_devices(&application.mAudioEngine.mContext, &pPlaybackInfos, &playbackCount, nullptr, nullptr) != MA_SUCCESS) {
+				// Error.
+			}
+
+			for (ma_uint32 iDevice = 0; iDevice < playbackCount; ++iDevice) {
+
+				options.emplace_back(pPlaybackInfos[iDevice].name, [&]() {
+					application.mAudioEngine.uninit();
+					application.mAudioEngine.init(options[mSelectedOption].text);
+
+					// Save choice
+
+					YAML::Node config = YAML::Node();
+
+					try {
+						config = YAML::LoadFile("config.yaml");
+					}
+					catch (YAML::BadFile const& e) {}
+
+					config["audioDevice"] = options[mSelectedOption].text;
+
+					std::ofstream myfile;
+					myfile.open("config.yaml", std::ios::binary | std::ios::out);
+					myfile << config;
+					myfile.close();
+					});
+			}
+
+
+			options.emplace_back("Back", [&]() {
+				mSelectedOption = 0;
+				menuId = 0;
+			});
+		}
+	};
+
+	populateMenuOptions(options, menuId);
+
+	{
+		nvgFontSize(application.mVg, std::min(application.mUiHeight / options.size() / 2, 64.0f));
+
+		if (mSelectedOption < 0) mSelectedOption = 0;
+		if (mSelectedOption >= options.size()) mSelectedOption = options.size() - 1;
+
+		for (int i = 0; i < options.size(); ++i) {
+			if (i == mSelectedOption) nvgFillColor(application.mVg, nvgRGBf(1, 0, 0));
+			else nvgFillColor(application.mVg, nvgRGBf(1, 1, 1));
+
+			nvgText(application.mVg, application.mUiWidth / 2, application.mUiHeight / (options.size() + 1) * (i + 1), options[i].text.c_str(), nullptr);
+		}
+
+		if (mPerformAction) {
+			options[mSelectedOption].action();
+			ma_engine_play_sound(&application.mAudioEngine.mEngine, "select1.ogg", nullptr);
+			mPerformAction = false;
+		}
+	}
+}
+
+void MenuState::destroy() {
+	auto& application = getApplication();
+	std::lock_guard lck{ application.mDispatcherMtx };
+	application.mDispatcher.disconnect(this);
+}
+
+static Application* kApplication;
+
+Application& getApplication() {
+	return *kApplication;
+}
 
 int main(int argc, char* argv[]) {
 	Application application;
+	kApplication = &application;
 	application.runMainThread();
 }
 

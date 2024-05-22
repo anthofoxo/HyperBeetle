@@ -7,3 +7,6 @@
 [submodule "vendor/yaml"]
 	path = vendor/yaml
 	url = https://github.com/jbeder/yaml-cpp
+[submodule "vendor/entt"]
+	path = vendor/entt
+	url = https://github.com/skypjack/entt
